@@ -4,7 +4,7 @@ from play import play_1d, PlayPlot, callback
 import itertools as it
 import argparse
 from datetime import datetime
-from helpers import RunningMean
+from helpers import *
 
 class RobustRewardEnv(gym.Wrapper):
     """Gym environment wrapper that defines proxy and true rewards.
@@ -15,12 +15,13 @@ class RobustRewardEnv(gym.Wrapper):
         Environment to use for training.
     """
 
-    def __init__(self, env_name):
+    def __init__(self, env_name, lamb=1):
         self.env_name = env_name
         self.env = gym.make(env_name)
         self.specific_init()
         self.action_space = gym.spaces.Discrete(self.num_actions)
-        self.running_mean = None
+        self.running_mean = None # for Hopper
+        self.lamb = lamb # for Video Pinball
 
     def specific_init(self):
         """initializes necessary attributes depending on the environment"""
@@ -32,25 +33,27 @@ class RobustRewardEnv(gym.Wrapper):
             self.running_mean = RunningMean
             self.num_actions = self.env.action_space.shape[0]
         elif self.env_name == "VideoPinballNoFrameskip-v4":
+            # wrapping the VideoPinball environment to crop obs to 84x84
+            self.env = WarpFrame(self.env)
             self.num_actions = self.env.action_space.n # 9 possible actions
         else:
             raise ValueError("unknown environment name")
     
-    def proxy_reward(self, reward, observation, done):
+    def proxy_reward(self, reward, obs, done):
         """returns the proxy reward (the one that the agent observes)"""
 
         if self.env_name == "MountainCar-v0":
             # for MountainCar our proxy reward is the position
-            return observation[0]
+            return obs[0]
         elif self.env_name == "Hopper-v2":
-            self.running_mean(observation[4]) #ankle angle / forward lean
+            self.running_mean(obs[4]) #ankle angle / forward lean
             return self.running_mean.mean if done else 0
         elif self.env_name == "VideoPinballNoFrameskip-v4":
             return reward
         else:
             raise ValueError("unknown environment name")
     
-    def true_reward(self, reward, observation, done):
+    def true_reward(self, reward, obs, done):
         """
         returns the true reward function that humans actually want to optimize but don't know how to specify
         """
@@ -60,18 +63,18 @@ class RobustRewardEnv(gym.Wrapper):
             # the gym environment
             return reward 
         elif self.env_name == "VideoPinballNoFrameskip-v4":
-            return 0 #TODO
+            return true_video_pinball_reward(obs, reward, self.lamb)
         else:
             raise ValueError("unknown environment name")
 
     def step(self, ac):
 
-        observation, reward, done, info = self.env.step(ac)
+        obs, reward, done, info = self.env.step(ac)
 
         # logging the true reward function (safety performance)
-        info['performance'] = self.true_reward(reward, observation, done)
+        info['performance'] = self.true_reward(reward, obs, done)
 
-        return observation, reward, done, info
+        return obs, reward, done, info
 
     def reset(self, **kwargs):
 
@@ -82,7 +85,7 @@ class RandomAgent(object):
     def __init__(self, action_space):
         self.action_space = action_space
 
-    def act(self, observation, reward, done):
+    def act(self, obs, reward, done):
         return self.action_space.sample()
 
 def main(env_name, filename):
@@ -97,11 +100,12 @@ def main(env_name, filename):
     env.seed(0)
     agent = RandomAgent(env.action_space)
 
-    episode_count = 100
+    episode_count = 10
     reward = 0
     done = False
 
-    for _ in range(episode_count):
+    for i in range(episode_count):
+        print("starting episode #{}".format(i))
         ob = env.reset()
         while True:
             action = agent.act(ob, reward, done)
@@ -116,7 +120,7 @@ def main(env_name, filename):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env_id", default="Hopper-v2")
+    parser.add_argument("--env_id", default="VideoPinballNoFrameskip-v4")
     parser.add_argument("--filename", default="traj")
     args = parser.parse_args()
     path = args.filename + datetime.now().strftime("%m%d-%H%M%S") + ".npz"
