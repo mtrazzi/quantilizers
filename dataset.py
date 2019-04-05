@@ -11,8 +11,11 @@ a transition can be: (data['obs'][t], data['acs'][t], data['obs'][t+1]) and get 
 from baselines import logger
 import numpy as np
 import argparse
+import os
 
 class Data(object):
+    """helper class to manage batches"""
+
     def __init__(self, inputs, labels, randomize):
         self.inputs = inputs
         self.labels = labels
@@ -41,9 +44,30 @@ class Data(object):
         self.pointer = end
         return inputs, labels
 
+def split_by_quantile(data, q):
+    """splits the data according to the quantile q of the Dataset"""
+    
+    sum_positions = data['obs'][:,:,0].sum(axis=-1)
+    furthest_right = np.argsort(sum_positions)
+    threshold = int(len(data['acs'])*q)
+    out = {}
+    ind = furthest_right[-threshold:]
+    out['obs'] = data['obs'][ind,:,:]
+    out['acs'] = data['acs'][ind,:]
+    out['rews'] = data['rews'][ind,:]
+    out['done'] = data['done'][ind,:]
+    out['ep_rets'] = data['ep_rets'][ind]
+    # if not os.path.exists('data/quantiles'):
+    #     os.makedirs('data/quantiles')
+    # np.savez('data/quantiles/{}'.format(q), **out)
+    return out
+
 class Dataset(object):
-    def __init__(self, expert_path, train_fraction=0.7, traj_limitation=-1, randomize=True):
-        traj_data = np.load(expert_path)
+    """contains the filtered data for a particular quantile value q"""
+
+    def __init__(self, expert_path, train_fraction=0.7, traj_limitation=-1, randomize=True, quantile=0.5):
+        traj_data = split_by_quantile(np.load(expert_path), q)
+        
         if traj_limitation < 0:
             traj_limitation = len(traj_data['obs'])
         obs = traj_data['obs'][:traj_limitation]
@@ -65,31 +89,18 @@ class Dataset(object):
         self.num_traj = min(traj_limitation, len(traj_data['obs']))
         self.num_transition = len(self.obs)
         self.randomize = randomize
-        self.dset = Data(self.obs, self.acs, self.randomize)
-        # for behavior cloning
-        self.train_set = Data(self.obs[:int(self.num_transition*train_fraction), :],
-                              self.acs[:int(self.num_transition*train_fraction):],
-                              self.randomize)
-        self.val_set = Data(self.obs[int(self.num_transition*train_fraction):, :],
-                            self.acs[int(self.num_transition*train_fraction):],
-                            self.randomize)
-        self.log_info()
+        self.dataset = Data(self.obs, self.acs, self.randomize)
+        self.q = quantile
+        #self.log_info()
 
     def log_info(self):
-        logger.log("Total trajectorues: %d" % self.num_traj)
+        logger.log("Total trajectories: %d" % self.num_traj)
         logger.log("Total transitions: %d" % self.num_transition)
         logger.log("Average returns: %f" % self.avg_ret)
         logger.log("Std for returns: %f" % self.std_ret)
 
-    def get_next_batch(self, batch_size, split=None):
-        if split is None:
-            return self.dset.get_next_batch(batch_size)
-        elif split == 'train':
-            return self.train_set.get_next_batch(batch_size)
-        elif split == 'val':
-            return self.val_set.get_next_batch(batch_size)
-        else:
-            raise NotImplementedError
+    def get_next_batch(self, batch_size):
+        return self.dataset.get_next_batch(batch_size)
 
     def plot(self):
         import matplotlib.pyplot as plt
@@ -105,4 +116,7 @@ if __name__ == '__main__':
     parser.add_argument("--traj_limitation", type=int, default=-1)
     parser.add_argument("--plot", type=bool, default=False)
     args = parser.parse_args()
-    d = Dataset(args.expert_path, args.traj_limitation)
+    #d = Dataset(args.expert_path, args.traj_limitation)
+    qs = [.5, .25, .125, .0625]
+    for q in qs:
+        d = Dataset(args.expert_path, args.traj_limitation, quantile=q)
