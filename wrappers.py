@@ -32,7 +32,6 @@ class RobustRewardEnv(gym.Wrapper):
             self.running_mean = RunningMean
             self.num_actions = self.env.action_space.shape[0]
         elif self.env_name == "VideoPinballNoFrameskip-v4":
-            #TODO: not so sure about what additional atari wrapper I should add around, need to ask Ryan
             self.num_actions = self.env.action_space.n # 9 possible actions
         else:
             raise ValueError("unknown environment name")
@@ -61,7 +60,7 @@ class RobustRewardEnv(gym.Wrapper):
             # the gym environment
             return reward 
         elif self.env_name == "VideoPinballNoFrameskip-v4":
-            return 0 #TODO: ask Ryan how to compute this lambda * between_bumps thing tomorrow
+            return 0 #TODO
         else:
             raise ValueError("unknown environment name")
 
