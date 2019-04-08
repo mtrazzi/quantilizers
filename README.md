@@ -18,6 +18,8 @@ See the rules [here](https://docs.google.com/document/d/1Xplmvf_UmAzsbg10ATrTYc-
 
 # Instructions for Hopper-v2
 
+0) **The goal of this game is to go as far as you can on the right**, using three rotations: the first one is next to the foot, the middle one and a higher one.
+
 1) After launching ```python gather_data.py```, you should see some mujocopy rendering (see image below).
 
 2) Press `d` to have "render every frame" set to `Off`, and press `Tab` to have an horizontal camera angle that follows you.
