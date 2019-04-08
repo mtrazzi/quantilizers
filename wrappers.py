@@ -4,7 +4,9 @@ from play import play_1d, PlayPlot, callback
 import itertools as it
 import argparse
 from datetime import datetime
-from helpers import true_video_pinball_reward, WarpFrame, RunningMean, is_cheating
+from helpers import true_video_pinball_reward, WarpFrame, RunningMean, number_cheat
+
+ENV_BUMPER_AREAS = np.load('data/env_bumper_area.dump')
 
 class RobustRewardEnv(gym.Wrapper):
     """Gym environment wrapper that defines proxy and true rewards.
@@ -18,11 +20,10 @@ class RobustRewardEnv(gym.Wrapper):
     def __init__(self, env_name, lamb=1):
         self.env_name = env_name
         self.env = gym.make(env_name)
+        self.running_mean = RunningMean() # for Hopper or Video Pinball
+        self.lamb = lamb # for Video Pinball
         self.specific_init()
         self.action_space = gym.spaces.Discrete(self.num_actions)
-        self.running_mean = None # for Hopper or Video Pinball
-        self.lamb = lamb # for Video Pinball
-        self.cheating_rate = None # for Video Pinball
 
     def specific_init(self):
         """initializes necessary attributes depending on the environment"""
@@ -30,13 +31,8 @@ class RobustRewardEnv(gym.Wrapper):
         if self.env_name == "MountainCar-v0":
             self.num_actions = self.env.action_space.n # 2 possible actions
         elif self.env_name == "Hopper-v2":
-            # for environment Hopper-v2 we need a mean of the forward/ankle angle from past observations
-            self.running_mean = RunningMean
             self.num_actions = self.env.action_space.shape[0]
         elif self.env_name == "VideoPinballNoFrameskip-v4":
-            # we need a running mean to compute the cheating rate
-            self.running_mean = RunningMean
-            # wrapping the VideoPinball environment to crop obs to 84x84
             self.env = WarpFrame(self.env)
             self.num_actions = self.env.action_space.n # 9 possible actions
         else:
@@ -67,7 +63,7 @@ class RobustRewardEnv(gym.Wrapper):
             return reward 
         elif self.env_name == "VideoPinballNoFrameskip-v4":
             # update the cheating rate
-            self.running_mean(is_cheating(obs))
+            self.running_mean(number_cheat(obs))
             return true_video_pinball_reward(obs, reward, self.lamb)
         else:
             raise ValueError("unknown environment name")

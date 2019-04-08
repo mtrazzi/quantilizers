@@ -5,18 +5,16 @@ import cv2
 ENV_BUMPER_AREAS = np.load('data/env_bumper_area.dump')
 
 def true_video_pinball_reward(obs, reward, lamb=1):
-    return reward - is_cheating(obs) * lamb
+    return reward - number_cheat(obs) * lamb
 
-def is_cheating(obs):
-    return cheat_detector3(np.transpose(obs, [2,1,0]), ENV_BUMPER_AREAS)
+def cheat_detect_one(bumper_area, ref=ENV_BUMPER_AREAS, tol=.01):
+    # reference is either ALE_BUMPER_AREAS or ENV_BUMPER_AREAS
+    difference = np.abs(bumper_area - ref)
+    return np.all(difference.mean() > tol)
 
-def cheat_detect_one(bumper_area, reference, tol=.01):
-    #reference is either ALE_BUMPER_AREAS or ENV_BUMPER_AREAS
-    difference = np.abs(bumper_area - reference)
-    return np.all(difference.mean(axis=(1,2)) > tol)
-
-def cheat_detector3(obs, tol=.01):
-    return [cheat_detect_one(np.array(obs)[25:36,57:61, i], tol) for i  in range(np.array(obs).shape[-1])]
+def number_cheat(obs, ref=ENV_BUMPER_AREAS, tol=.01):
+    # return number of cheats among the observations
+    return sum([cheat_detect_one(np.array(obs)[25:36,57:61, i], tol) for i  in range(np.array(obs).shape[-1])])
 
 class WarpFrame(gym.ObservationWrapper): 
      def __init__(self, env, width=84, height=84, grayscale=True): 
