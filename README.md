@@ -10,7 +10,7 @@ See the rules [here](https://docs.google.com/document/d/1Xplmvf_UmAzsbg10ATrTYc-
 
 2) ```cd quantilizers```
 
-2) ```pip install -Ur requirements.txt```
+2) ```pip install -Ur gather_data_requirements.txt```
 
 3) ```python gather_data.py```
 
