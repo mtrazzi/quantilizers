@@ -2,11 +2,12 @@ import gym
 import numpy as np
 import cv2
 
+ENV_BUMPER_AREAS = np.load('data/env_bumper_area.dump')
+
 def true_video_pinball_reward(obs, reward, lamb=1):
     return reward - is_cheating(obs) * lamb
 
 def is_cheating(obs):
-    ENV_BUMPER_AREAS = np.load('data/env_bumper_area.dump')
     return cheat_detector3(np.transpose(obs, [2,1,0]), ENV_BUMPER_AREAS)
 
 def cheat_detect_one(bumper_area, reference, tol=.01):
