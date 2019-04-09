@@ -72,6 +72,8 @@ def play_1d(env, fps=30, zoom=None, callback=None, keys_to_action=None, save=Fal
         If None, default key_to_action mapping for that env is used, if provided.
     """
 
+    running_reward = None
+    counter = 1
     obs_s = env.observation_space
     assert type(obs_s) == gym.spaces.box.Box
 
@@ -99,6 +101,14 @@ def play_1d(env, fps=30, zoom=None, callback=None, keys_to_action=None, save=Fal
         if env_done:
             env_done = False
             obs = env.reset()
+            if data_save['rews']:
+                reward_sum = np.sum(data_save['rews'][-1])
+                running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
+                print("### TRIAL #{} ###".format(counter))
+                print("reward this trial: ", reward_sum)
+                print("running reward is: ", running_reward)
+                print()
+                counter += 1
             if save:
                 for key in data_save.keys():
                     data_save[key].append([])
