@@ -1,17 +1,16 @@
 import numpy as np
 import os
 from os.path import isfile, join
-from padding import pad1d, pad2d, pad3d
 import argparse
 
 def merge_files(path_of_dir, output_file):
 
-    files = [f for f in os.listdir(".") if (isfile(join(".", f)) and f.endswith('.npz'))]
+    files = [f for f in os.listdir(path_of_dir) if (isfile(join(path_of_dir, f)) and f.endswith('.npz'))]
 
     # load all those npz in one big list
     huge_tab = []
     for f in files:
-        huge_tab.append(np.load(f))
+        huge_tab.append(np.load(join(path_of_dir, f)))
 
     data_save = {'obs':[], 'acs':[], 'rews':[], 'done':[], 'ep_rets':[]}
 
