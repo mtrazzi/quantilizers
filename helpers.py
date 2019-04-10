@@ -53,14 +53,26 @@ class RunningMean:
     __call__ = new
 
 
-def graph_one(tr, pr, quantiles, filename='fig/mc.png', width=.35):
-    plt.bar(np.arange(len(tr)), tr, width, label="True reward", color='g');
-    plt.bar(np.arange(len(pr)) + width, pr, width, label="Proxy reward", color='r');
-    plt.title("Performance of quantilizer with varying q")                                                       
+def graph_one(tr, pr, quantiles, filename='fig/mc.png', width=.35, title="MountainCar"):
+	plt.figure(figsize=(4.3, 3.2));
+
+	# True reward
+    ax1 = plt.subplot(111)
+    ax1.set_ylabel("True Reward (V)")
+    bar1 = ax1.bar(np.arange(len(tr)), tr, width, label="True reward", color='g');
+
+    ax2 = ax1.twinx()
+    ax2.set_ylabel("Explicit reward (U)")
+    bar2 = ax2.bar(np.arange(len(pr)) + width, pr, width, label="Explicit reward", color='r');
+
     xticks = ["imitation"] + [str(i) for i in quantiles[1:]] + ["Deep Q"]
     plt.xticks(np.arange(len(tr))+width/2, xticks)
-    plt.xlabel("q values")                                                                                                                                  
-    plt.legend(loc='best')                                                                                                                                  
+    plt.xlabel("q values")
+    plt.legend(loc='best')
+    lines = (bar1, bar2)
+    labels = [l.get_label() for l in lines]
+    ax1.yaxis.set_major_locator(m(nbins=3))
+    ax2.yaxis.set_major_locator(m(nbins=3))
     print("saving results in {}".format(filename))
     plt.savefig(filename)
     plt.close() 
