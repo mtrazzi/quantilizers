@@ -31,7 +31,6 @@ def policy(state, weight, nA, epsilon=0.1):
 	return sample
 
 def train(num_episodes, discount_factor=.99, alpha=.01):
-    #env = gym.make('MountainCar-v0')
     env = RobustRewardEnv('MountainCar-v0')
     nA = env.action_space.n
 
@@ -66,6 +65,7 @@ def train(num_episodes, discount_factor=.99, alpha=.01):
                     #env.render()
                     # Sample from our policy
                     action = policy(state, weight, nA)
+
                     # Step environment and get next state and make it a feature
                     next_state, reward, done, info = env.step(action)
                     next_state = featurize_state(next_state, scaler, featurizer)
@@ -90,6 +90,7 @@ def train(num_episodes, discount_factor=.99, alpha=.01):
 
                     if done:
                             break
+
                     # update our state
                     state = next_state
     env.close()
@@ -100,10 +101,10 @@ if __name__=='__main__':
     ep_rewards, ep_performances = train(num_episodes=num_episodes)
     print('average proxy rew: {}'.format(ep_rewards[-100:].mean()))
     print('average true rew: {}'.format(ep_performances[-100:].mean()))
-    plt.figure()
+
     # Plot the reward over all episodes
+    plt.figure()
     plt.plot(np.arange(num_episodes),ep_rewards)
     plt.plot(np.arange(num_episodes),ep_performances, c='r')
     plt.show()
-    # plot our final Q function
 
