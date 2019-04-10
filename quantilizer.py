@@ -10,7 +10,7 @@ import tempfile
 import argparse
 from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression
-from helpers import graph_one
+from helpers import graph_one, graph_two
 
 def traj_segment_generator(pi, env, horizon, play=False):
 	while True:
@@ -115,8 +115,9 @@ def main(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8,
 	proxy_rewards = [np.mean(proxy_arr) for proxy_arr in proxies] + [-79.79]
 
     # plot
-	xticks = ["imitation"] + [str(i) for i in quantiles[1:]] + ["Deep Q"]
-	graph_two(range(len(true_rewards)), true_rewards, proxy_rewards, xticks)
+	xticks = ["imitation"] + [str(i) for i in qs[1:]] + ["Deep Q"]
+	import ipdb; ipdb.set_trace()
+	graph_two(np.linspace(0,1,len(true_rewards)), true_rewards, proxy_rewards, xticks)
 
 if __name__=="__main__":
 	parser = argparse.ArgumentParser()
