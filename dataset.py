@@ -64,7 +64,7 @@ def split_by_quantile(data, q):
 class Dataset(object):
     """contains the filtered data for a particular quantile value q"""
 
-    def __init__(self, expert_path, train_fraction=0.7, traj_limitation=-1, randomize=True, quantile=0.5):
+    def __init__(self, expert_path, traj_limitation=-1, randomize=True, quantile=0.5):
         traj_data = split_by_quantile(np.load(expert_path), quantile)
         
         if traj_limitation < 0:
