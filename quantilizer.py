@@ -124,6 +124,6 @@ if __name__=="__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--reg", action="store", default=1e-3, type=float)
 	parser.add_argument("--hidden_size", action="store", default=20, type=int)
-	parser.add_argument("--data_set_path", action="store", default='log/MountainCar-v0/ryan.npz', type=str)	
+	parser.add_argument("--dataset_path", action="store", default='log/MountainCar-v0/ryan.npz', type=str)	
 	args = parser.parse_args()
-	main(reg=args.reg, hidden_size=args.hidden_size, human_dataset=args.data_set_path)
+	main(reg=args.reg, hidden_size=args.hidden_size, human_dataset=args.dataset_path)
