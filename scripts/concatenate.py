@@ -5,6 +5,8 @@ import argparse
 
 def merge_files(path_of_dir, output_file):
 
+    print("Concatenating files from", path_of_dir, "to", output_file)
+    
     files = [f for f in os.listdir(path_of_dir) if (isfile(join(path_of_dir, f)) and f.endswith('.npz'))]
 
     # load all those npz in one big list
