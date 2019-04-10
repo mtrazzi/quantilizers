@@ -1,8 +1,10 @@
+from matplotlib.ticker import MaxNLocator
+import matplotlib.pyplot as plt
 import gym
 import numpy as np
 import cv2
 
-ENV_BUMPER_AREAS = np.load('data/env_bumper_area.dump')
+ENV_BUMPER_AREAS = np.load('data/env_bumper_areas.npy')
 
 def true_video_pinball_reward(obs, reward, lamb=1):
     return reward - number_cheat(obs) * lamb
@@ -49,3 +51,36 @@ class RunningMean:
         self.mean = self.total/self.length
         return self.mean
     __call__ = new
+
+
+def graph_one(tr, pr, quantiles, filename='fig/mc.png', width=.35):
+    plt.bar(np.arange(len(tr)), tr, width, label="True reward", color='g');
+    plt.bar(np.arange(len(pr)) + width, pr, width, label="Proxy reward", color='r');
+    plt.title("Performance of quantilizer with varying q")                                                       
+    xticks = ["imitation"] + [str(i) for i in quantiles[1:]] + ["Deep Q"]
+    plt.xticks(np.arange(len(tr))+width/2, xticks)
+    plt.xlabel("q values")                                                                                                                                  
+    plt.legend(loc='best')                                                                                                                                  
+    print("saving results in {}".format(filename))
+    plt.savefig(filename)
+    plt.close() 
+	
+def graph_two(x, y1, y2, xticks, m=MaxNLocator, title="MountainCar"):
+    #plt.figure(figsize=(6, 5));
+    plt.figure(figsize=(4.3, 3.2));
+    width = .35
+    ax1 = plt.subplot(111)
+    bar1 = ax1.bar(x, y1, width, label="Implicit loss", color='maroon');
+    ax1.set_ylabel("Implicit loss")
+    ax2 = ax1.twinx()
+    ax2.set_ylabel("Explicit reward")
+    bar2 = ax2.bar(x + width, y2, width, label="Explicit reward", color='goldenrod');
+    plt.title(title)
+    plt.xticks(x+width/2, xticks)
+    plt.xlabel("q values")
+    lines = (bar1, bar2)
+    labels = [l.get_label() for l in lines]
+    ax1.yaxis.set_major_locator(m(nbins=3))
+    ax2.yaxis.set_major_locator(m(nbins=3))
+    #plt.legend(lines,labels)
+    plt.savefig("fig/quant-vidpin.png")

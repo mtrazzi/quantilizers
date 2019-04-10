@@ -10,7 +10,7 @@ import tempfile
 import argparse
 from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression
-from matplotlib.ticker import MaxNLocator
+from helpers import graph_one
 
 def traj_segment_generator(pi, env, horizon, play=False):
 	while True:
@@ -72,8 +72,9 @@ def main(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8,
 		optim_batch_size = 256, reg = 1e-2, optim_stepsize = 3e-4, ckpt_dir = None , verbose=True, 
 		hidden_size = 20, reuse = False, horizon = 200, human_dataset='log/MountainCar-v0/ryan.npz'):
 
+	print("training on data: [{}]".format(human_dataset))
 	# Load data
-	qs = [1.0, .5, .25, .125]
+	qs = [1.0]#, .5, .25, .125]
 	perfs = []
 	proxies = []
 	for q in qs:
@@ -110,34 +111,12 @@ def main(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8,
 		# to delete from RAM (not sure if necessary)
 		del dataset
 
-	#store performance of quantilizer and dqn
-	#TODO: add std for errorbar
 	true_rewards = [np.mean(perf_arr) for perf_arr in perfs] + [-180.16]
 	proxy_rewards = [np.mean(proxy_arr) for proxy_arr in proxies] + [-79.79]
 
-	#TODO: add DeepQ and pure imitation to this graph
-	width = .35                                    
-
-	def graph_two(x, y1, y2, xticks, m=MaxNLocator):
-		#plt.figure(figsize=(6, 5));
-		plt.figure(figsize=(4.3, 3.2));
-		width = .35
-		ax1 = plt.subplot(111)
-		bar1 = ax1.bar(x, y1, width, label="Implicit loss", color='maroon');
-		ax1.set_ylabel("Implicit loss")
-		ax2 = ax1.twinx()
-		ax2.set_ylabel("Explicit reward")
-		bar2 = ax2.bar(x + width, y2, width, label="Explicit reward", color='goldenrod');
-		plt.title("Video Pinball")
-		plt.xticks(x+width/2, xticks)
-		plt.xlabel("q values")
-		lines = (bar1, bar2)
-		labels = [l.get_label() for l in lines]
-		ax1.yaxis.set_major_locator(m(nbins=3))
-		ax2.yaxis.set_major_locator(m(nbins=3))
-		#plt.legend(lines,labels)
-		plt.savefig("fig/quant-vidpin.png")
-	import ipdb; ipdb.set_trace()
+    # plot
+    xticks = ["imitation"] + [str(i) for i in quantiles[1:]] + ["Deep Q"]
+    graph_two(range(len(true_rewards)), true_rewards, proxy_rewards, xticks)
 
 if __name__=="__main__":
 	parser = argparse.ArgumentParser()
