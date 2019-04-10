@@ -70,7 +70,7 @@ def make_session(config=None, num_cpu=None, make_default=False, graph=None):
 
 def main(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8, 
 		optim_batch_size = 256, reg = 1e-2, optim_stepsize = 3e-4, ckpt_dir = None , verbose=True, 
-		hidden_size = 20, reuse = False, horizon = 200, human_dataset='log/MountainCar-v0/ryan.npz'):
+		hidden_size = 20, reuse = False, horizon = 200, human_dataset='log/Hopper-v2/ryan.npz', env_name='Hopper'):
 
 	print("training on data: [{}]".format(human_dataset))
 	# Load data
