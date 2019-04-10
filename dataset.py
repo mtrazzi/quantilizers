@@ -8,7 +8,6 @@ the values of each item is a list storing the expert trajectory sequentially
 a transition can be: (data['obs'][t], data['acs'][t], data['obs'][t+1]) and get reward data['rews'][t]
 '''
 
-from baselines import logger
 import numpy as np
 import argparse
 import os
@@ -92,12 +91,6 @@ class Dataset(object):
         self.dataset = Data(self.obs, self.acs, self.randomize)
         self.q = quantile
         #self.log_info()
-
-    def log_info(self):
-        logger.log("Total trajectories: %d" % self.num_traj)
-        logger.log("Total transitions: %d" % self.num_transition)
-        logger.log("Average returns: %f" % self.avg_ret)
-        logger.log("Std for returns: %f" % self.std_ret)
 
     def get_next_batch(self, batch_size):
         return self.dataset.get_next_batch(batch_size)
