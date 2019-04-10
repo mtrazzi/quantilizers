@@ -76,7 +76,7 @@ class Dataset(object):
         # and S is the environment observation/action space.
         # Flatten to (N * L, prod(S))
         self.obs = np.reshape(obs, [-1, np.prod(obs.shape[2:])])
-        self.acs = np.reshape(acs, [-1, 1])
+        self.acs = np.reshape(acs, [-1, np.prod(acs.shape[2:])]) if len(obs.shape) > 2 else np.reshape(acs, [-1, -1])
         #self.acs = np.eye(3)[acs.ravel()] #if we want one-hot
 
         self.rets = traj_data['ep_rets'][:traj_limitation]
@@ -84,6 +84,7 @@ class Dataset(object):
         self.std_ret = np.std(np.array(self.rets))
         if len(self.acs.shape) > 2:
             self.acs = np.squeeze(self.acs)
+        import ipdb; ipdb.set_trace()
         assert len(self.obs) == len(self.acs)
         self.num_traj = min(traj_limitation, len(traj_data['obs']))
         self.num_transition = len(self.obs)
@@ -105,7 +106,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--expert_path", type=str, 
-                        default="./data/mountain_car_ryan_1.npz")
+                        default="./log/Hopper-v2/ryan.npz")
     parser.add_argument("--traj_limitation", type=int, default=-1)
     parser.add_argument("--plot", type=bool, default=False)
     args = parser.parse_args()

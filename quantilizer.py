@@ -70,7 +70,7 @@ def make_session(config=None, num_cpu=None, make_default=False, graph=None):
 
 def main(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8, 
 		optim_batch_size = 256, reg = 1e-2, optim_stepsize = 3e-4, ckpt_dir = None , verbose=True, 
-		hidden_size = 20, reuse = False, horizon = 200, human_dataset='log/Hopper-v2/ryan.npz', env_name='Hopper'):
+		hidden_size = 20, reuse = False, horizon = 200, human_dataset='log/Hopper-v2/ryan.npz', env_name='Hopper-v2'):
 
 	print("training on data: [{}]".format(human_dataset))
 	# Load data
@@ -81,7 +81,7 @@ def main(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8,
 		dataset = Dataset(human_dataset, quantile=q)
 
 		# Gym setup
-		env = gym.make('MountainCar-v0') #TODO: add my wrapper instead
+		env = gym.make(env_name)
 
 		# Model setup
 		make_session(num_cpu=4).__enter__()
@@ -124,6 +124,6 @@ if __name__=="__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--reg", action="store", default=1e-3, type=float)
 	parser.add_argument("--hidden_size", action="store", default=20, type=int)
-	parser.add_argument("--dataset_path", action="store", default='log/MountainCar-v0/ryan.npz', type=str)	
+	parser.add_argument("--dataset_path", action="store", default='log/Hopper-v2/ryan.npz', type=str)	
 	args = parser.parse_args()
 	main(reg=args.reg, hidden_size=args.hidden_size, human_dataset=args.dataset_path)
