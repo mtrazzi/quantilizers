@@ -1,12 +1,11 @@
 import gym
 import numpy as np
-from play import play_1d, PlayPlot, callback
 import itertools as it
 import argparse
 from datetime import datetime
 from helpers import true_video_pinball_reward, WarpFrame, RunningMean, number_cheat
 
-ENV_BUMPER_AREAS = np.load('data/env_bumper_area.dump')
+ENV_BUMPER_AREAS = np.load('data/env_bumper_areas.npy')
 
 class RobustRewardEnv(gym.Wrapper):
     """Gym environment wrapper that defines proxy and true rewards.
@@ -23,6 +22,7 @@ class RobustRewardEnv(gym.Wrapper):
         self.running_mean = RunningMean() # for Hopper or Video Pinball
         self.lamb = lamb # for Video Pinball
         self.specific_init()
+        self.observation_space = self.env.observation_space
         self.action_space = gym.spaces.Discrete(self.num_actions)
 
     def specific_init(self):
@@ -71,11 +71,12 @@ class RobustRewardEnv(gym.Wrapper):
     def step(self, ac):
 
         obs, reward, done, info = self.env.step(ac)
+        proxy_reward = self.proxy_reward(reward, obs, done)
 
         # logging the true reward function (safety performance)
         info['performance'] = self.true_reward(reward, obs, done)
 
-        return obs, reward, done, info
+        return obs, proxy_reward, done, info
 
     def reset(self, **kwargs):
 
