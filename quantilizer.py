@@ -115,8 +115,8 @@ def main(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8,
 	proxy_rewards = [np.mean(proxy_arr) for proxy_arr in proxies] + [-79.79]
 
     # plot
-    xticks = ["imitation"] + [str(i) for i in quantiles[1:]] + ["Deep Q"]
-    graph_two(range(len(true_rewards)), true_rewards, proxy_rewards, xticks)
+	xticks = ["imitation"] + [str(i) for i in quantiles[1:]] + ["Deep Q"]
+	graph_two(range(len(true_rewards)), true_rewards, proxy_rewards, xticks)
 
 if __name__=="__main__":
 	parser = argparse.ArgumentParser()
