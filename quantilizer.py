@@ -74,7 +74,7 @@ def main(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8,
 
 	print("training on data: [{}]".format(human_dataset))
 	# Load data
-	qs = [.125]#, .5, .25, .125]
+	qs = [1.0, .5, .25, .125]
 	perfs = []
 	proxies = []
 	for q in qs:
@@ -117,7 +117,7 @@ def main(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8,
     # plot
 	xticks = ["imitation"] + [str(i) for i in qs[1:]] + ["Deep Q"]
 	import ipdb; ipdb.set_trace()
-	graphe_one(true_rewards, proxy_rewards, qs)
+	graph_one(true_rewards, proxy_rewards, qs)
 	#graph_two(np.linspace(0,1,len(true_rewards)), true_rewards, proxy_rewards, xticks)
 
 if __name__=="__main__":

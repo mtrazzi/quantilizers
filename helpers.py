@@ -53,10 +53,10 @@ class RunningMean:
     __call__ = new
 
 
-def graph_one(tr, pr, quantiles, filename='fig/mc.png', width=.35, title="MountainCar"):
-	plt.figure(figsize=(4.3, 3.2));
+def graph_one(tr, pr, quantiles, m=MaxNLocator, filename='fig/mc.png', width=.35, title="MountainCar"):
+    plt.figure(figsize=(4.3, 3.2))
 
-	# True reward
+    # True reward
     ax1 = plt.subplot(111)
     ax1.set_ylabel("True Reward (V)")
     bar1 = ax1.bar(np.arange(len(tr)), tr, width, label="True reward", color='g');
