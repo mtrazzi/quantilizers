@@ -71,6 +71,15 @@ def mlp_classification(input_dim, output_size, hidden_size=20):
 				metrics=['accuracy'])
 	return model
 
+def process_labels(labels):
+	"""transforms label array to one hot"""
+	labels = labels.astype(int)
+	labels = labels - labels.min()
+	def encoding(array):
+		return array[0] + 3  * array[1] + (3 ** 2) * array[2]
+	encoded_labels = np.array([encoding(label) for label in labels])
+	return np.eye(27)[encoded_labels]
+
 def train(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8, 
 		optim_batch_size = 256, reg = 1e-2, optim_stepsize = 3e-4, ckpt_dir = None , verbose=True, 
 		hidden_size = 20, reuse = False, horizon = 200, human_dataset='log/Hopper-v2/ryan.npz', env_name='Hopper-v2'):
@@ -79,16 +88,20 @@ def train(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8,
 	print("training on data: [{}]".format(human_dataset))
 
 	trained_models = []
+	output_size = 27 if env_name == 'Hopper-v2' else 1
 
 	for q in [1.0, .5, .25, .125]:
 		# load data
 		dataset = Dataset(human_dataset, q)
 
 		# compile keras model
-		model = mlp_classification(dataset.obs.shape[-1], dataset.acs.shape[-1])
+		model = mlp_classification(dataset.obs.shape[-1], output_size)
 
 		# split data
 		x_train, x_test, y_train, y_test = train_test_split(dataset.obs, dataset.acs, train_size=0.8, test_size=0.2)
+		
+		# transform to one_hot
+		y_train, y_test = process_labels(y_train), process_labels(y_test)
 
 		# add a callback tensorboard object to visualize learning
 		log_dir = './train_' + datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
