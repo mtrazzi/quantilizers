@@ -8,9 +8,15 @@ from tqdm import tqdm
 import tensorflow as tf
 import tempfile
 import argparse
-from sklearn.neural_network import MLPClassifier
-from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OneHotEncoder
 from helpers import graph_one, graph_two
+import keras
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Activation
+from keras.optimizers import SGD
+from keras import callbacks
+from datetime import datetime
 
 def traj_segment_generator(pi, env, horizon, play=False):
 	while True:
@@ -52,73 +58,104 @@ def get_trajectories(pi, env, horizon, n_trajectories):
 		rew_list.append(traj['rew'].copy())
 	return ob_list, ac_list, new_list, rew_list
 
-def make_session(config=None, num_cpu=None, make_default=False, graph=None):
-    """Returns a session that will use <num_cpu> CPU's only"""
-    if num_cpu is None:
-        num_cpu = int(os.getenv('RCALL_NUM_CPU', multiprocessing.cpu_count()))
-    if config is None:
-        config = tf.ConfigProto(
-            allow_soft_placement=True,
-            inter_op_parallelism_threads=num_cpu,
-            intra_op_parallelism_threads=num_cpu)
-        config.gpu_options.allow_growth = True
-
-    if make_default:
-        return tf.InteractiveSession(config=config, graph=graph)
-    else:
-        return tf.Session(config=config, graph=graph)
+def mlp_classification(input_dim, output_size, hidden_size=20):
+	model = Sequential()
+	model.add(Dense(hidden_size, activation='relu', input_dim=input_dim))
+	model.add(Dropout(0.5))
+	model.add(Dense(hidden_size, activation='relu'))
+	model.add(Dropout(0.5))
+	model.add(Dense(output_size, activation='softmax'))
+	sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
+	model.compile(loss='categorical_crossentropy',
+				optimizer=sgd,
+				metrics=['accuracy'])
+	return model
 
 def train(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8, 
 		optim_batch_size = 256, reg = 1e-2, optim_stepsize = 3e-4, ckpt_dir = None , verbose=True, 
 		hidden_size = 20, reuse = False, horizon = 200, human_dataset='log/Hopper-v2/ryan.npz', env_name='Hopper-v2'):
-
+	"""returns a trained model on the dataset of human demonstrations for each quantile"""
+	
 	print("training on data: [{}]".format(human_dataset))
 
-	# classifier list to pass to testing
-	clf_list = []
+	trained_models = []
 
 	for q in [1.0, .5, .25, .125]:
-		# Load data
+		# load data
 		dataset = Dataset(human_dataset, q)
 
-		# Model setup
-		make_session(num_cpu=4).__enter__()
+		# compile keras model
+		model = mlp_classification(dataset.obs.shape[-1], dataset.acs.shape[-1])
 
-		#input_dim = 2
-		output_dim = 3
-		ob = tf.placeholder(tf.float32, [None, 2])
-		ac = tf.placeholder(tf.float32, [None, 1])
+		# split data
+		x_train, x_test, y_train, y_test = train_test_split(dataset.obs, dataset.acs, train_size=0.8, test_size=0.2)
 
-		clf = MLPClassifier(hidden_layer_sizes=(hidden_size, hidden_size), alpha=.0003)
-		full_len = 20000  #len(dataset.acs)
-		# full_len = len(dataset.acs)
-		i_tr = 4*full_len//5
-		clf.fit(dataset.obs[:i_tr], dataset.acs[:i_tr].ravel())
-		train_score = clf.score(dataset.obs[:i_tr], dataset.acs[:i_tr])
-		test_score = clf.score(dataset.obs[i_tr:], dataset.acs[i_tr:])
-		print("train score q={}: {}".format(q, train_score))
+		# add a callback tensorboard object to visualize learning
+		log_dir = './train_' + datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
+		tbCallBack = callbacks.TensorBoard(log_dir=log_dir, histogram_freq=0,  
+          write_graph=True, write_images=True)
+
+		# train
+		model.fit(x_train, y_train, validation_split=0.8, callbacks=[tbCallBack])
+
+		# test accuracy
+		metrics_output = model.evaluate(x_test, y_test)
+		acc_index = model.metrics_names.index('acc')
+		test_score = metrics_output[acc_index]
 		print("test score q={}: {}".format(q, test_score))
 
-		clf_list.append(clf)
-		# to delete from RAM (not sure if necessary)
+		# to delete from RAM
+		model.save_weights('model_weights_' + env_name + '_' + str(q) + '.h5')
+
+		trained_models.append(model)
+
 		del dataset
 
-	return clf_list
+	return trained_models
 
-def test(clf_list, env_name, horizon):
+def load_models(weights_files_list, env_name):
+	obs_dim, acs_dim = (2, 1) if env_name == 'MountainCar-v0' else (11, 3)
+	models_list = []
+	for filename in weights_files_list:
+		model = mlp_classification(obs_dim, acs_dim)
+		print("loading weights from file: ", filename)
+		model.load_weights(filename)
+		models_list.append(model)
+	return models_list
 
-	# collect a bunch of trajectories
+def test(env_name, weights_files_list=None, horizon=None):
+
+	# loading weights
+	if not weights_files_list:
+		qs = [0.125, 0.25, 0.5, 1.0]
+		weights_files_list = ['model_weights_' + env_name + '_' + str(q) + '.h5' for q in qs]
+
+	# loading models
+	models_list = load_models(weights_files_list, env_name)
+
+	# setup
 	env = gym.make(env_name)
-	pi = lambda ob: clf.predict(ob.reshape(1,-1))[0]
-	n_trajectories = 1000
-	ob_list, ac_list, new_list, rew_list = get_trajectories(pi, env, horizon, n_trajectories)
+	proxies, perfs = [], []
+	if not horizon:
+		horizon = env.spec.max_episode_steps
 
-	# return relevant metrics
-	proxy = [i[:,0].sum() for i in ob_list]
-	perf = [-len(i) for i in ob_list]
-	return proxy, perf
+	# for all quantiles, collect trajectories
+	for model in models_list:
 
-def plot(perfs, proxies):
+		pi = lambda ob: model.predict(ob.reshape(1,-1))[0]
+		n_trajectories = 1000
+		ob_list, ac_list, new_list, rew_list = get_trajectories(pi, env, horizon, n_trajectories)
+
+		# return relevant metrics
+		proxy = [i[:,0].sum() for i in ob_list]
+		perf = [-len(i) for i in ob_list]
+
+		proxies.append(proxy)
+		perfs.append(perf)
+	
+	return proxies, perfs
+
+def plot(proxies, perfs):
 	qs = [1.0, .5, .25, .125]
 	true_rewards = [np.mean(perf_arr) for perf_arr in perfs] + [-180.16]
 	proxy_rewards = [np.mean(proxy_arr) for proxy_arr in proxies] + [-79.79]
@@ -131,5 +168,10 @@ if __name__=="__main__":
 	parser.add_argument("--hidden_size", action="store", default=20, type=int)
 	parser.add_argument("--dataset_path", action="store", default='log/Hopper-v2/ryan.npz', type=str)
 	parser.add_argument("--env_name", action="store", default="Hopper-v2", type=str)
+	parser.add_argument("--mode", action="store", default="train", type=str)
+	parser.add_argument('-w','--weights_list', nargs='+', default=None)
 	args = parser.parse_args()
-	train(reg=args.reg, hidden_size=args.hidden_size, human_dataset=args.dataset_path, env_name=args.env_name)
+	if (args.mode == "train"):
+		train(reg=args.reg, hidden_size=args.hidden_size, human_dataset=args.dataset_path, env_name=args.env_name)
+	elif (args.mode == "test"):
+		test(args.env_name)
