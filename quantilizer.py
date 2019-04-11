@@ -18,6 +18,9 @@ from keras.optimizers import SGD
 from keras import callbacks
 from datetime import datetime
 
+def decode_one_hot(action):
+	##
+
 def traj_segment_generator(pi, env, horizon, play=False):
 	while True:
 		#ac = env.action_space.sample()
@@ -26,12 +29,13 @@ def traj_segment_generator(pi, env, horizon, play=False):
 		rew = -1
 
 		obs = np.zeros((horizon, len(ob)))
-		acs = np.zeros((horizon, 1))
+		acs = np.zeros((horizon, 27))
 		news = np.zeros((horizon, 1))
 		rews = np.zeros((horizon, 1))
 		for t in range(horizon):
 			ac = pi(ob)
 			obs[t] = ob
+			import ipdb; ipdb.set_trace()
 			acs[t] = ac
 			news[t] = new
 			rews[t] = rew
@@ -127,7 +131,7 @@ def train(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8,
 	return trained_models
 
 def load_models(weights_files_list, env_name):
-	obs_dim, acs_dim = (2, 1) if env_name == 'MountainCar-v0' else (11, 3)
+	obs_dim, acs_dim = (2, 1) if env_name == 'MountainCar-v0' else (11, 27)
 	models_list = []
 	for filename in weights_files_list:
 		model = mlp_classification(obs_dim, acs_dim)
@@ -155,7 +159,7 @@ def test(env_name, weights_files_list=None, horizon=None):
 	# for all quantiles, collect trajectories
 	for model in models_list:
 
-		pi = lambda ob: model.predict(ob.reshape(1,-1))[0]
+		pi = lambda ob: model.predict(ob.reshape(1,-1))
 		n_trajectories = 1000
 		ob_list, ac_list, new_list, rew_list = get_trajectories(pi, env, horizon, n_trajectories)
 
