@@ -43,7 +43,7 @@ def plot_scatter_plot(path_list, label_list):
     for index, filename in enumerate(path_list):
         data = np.load(filename)
         true_rews = data['ep_rets']
-        proxy_rews = results = [np.mean(traj[:,4]) for traj in data['obs']]
+        proxy_rews = [np.mean(traj[:,4]) for traj in data['obs']]
         plt.xlabel("average forward learn / ankle angle (explicit reward)")
         plt.ylabel("moving to the right (true reward)")
         plt.scatter(proxy_rews, true_rews, 1)
@@ -59,9 +59,32 @@ def plot_scatter_plot(path_list, label_list):
         plt.savefig('log/fig/{}'.format(label_list[index]))
         plt.show()
 
+def average_performance(path_list, label_list):
+    for index, filename in enumerate(path_list):
+        data = np.load(filename)
+        true_rews = data['ep_rets']
+        proxy_rews = [np.mean(traj[:,4]) for traj in data['obs']]
+        average_true = np.mean(true_rews)
+        average_proxy = np.mean(proxy_rews)
+        print("for {} the mean of true rewards over all trajectories is {} but for proxy reward it's actually {}".format(label_list[index], average_true, average_proxy))
+
+def average_performance_quantile(dataset_name_list, label_list,
+                        env_name='Hopper-v2', quantiles = [1.0, .5, .25, .125]):
+
+    for index, dataset_name in enumerate(dataset_name_list):
+        proxy_rews_list = np.load('log/rewards/{}_{}_true.npy'.format(dataset_name, env_name))
+        true_rews_list = np.load('log/rewards/{}_{}_proxy.npy'.format(dataset_name, env_name))
+        for i_q, q in enumerate(quantiles):
+            tr_iq, pr_iq = true_rews_list[i_q], proxy_rews_list[i_q]
+            average_true = np.mean([sum(traj) for traj in tr_iq])
+            average_proxy = np.mean([sum(traj) for traj in pr_iq])
+            print("for q={} dataset={} true rewards mean={} and proxy reward mean = {}".format(q, label_list[index], average_true, average_proxy))
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-p','--path_list', nargs='+', help='<Required> Set flag', required=True)
+    parser.add_argument('-p','--path_list', nargs='+', help='<Required> Set flag')
+    parser.add_argument('-D','--dataset_list', nargs='+')
     parser.add_argument('-l','--label_list', nargs='+', default=None)
     parser.add_argument('-d', '--debug', default=False)
     parser.add_argument('--discount', default=0.99)
@@ -71,6 +94,10 @@ def main():
         plot_smoothed_rets(args.path_list, args.discount, args.label_list)
     elif (args.mode == 'scatter'):
         plot_scatter_plot(args.path_list, args.label_list)
+    elif (args.mode == 'average'):
+        average_performance(args.path_list, args.label_list)
+    elif (args.mode == 'quantiles'):
+        average_performance_quantile(args.dataset_list, args.label_list)
 
 if __name__ == '__main__':
     main()
