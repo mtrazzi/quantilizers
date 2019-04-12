@@ -19,6 +19,7 @@ from keras import callbacks
 from datetime import datetime
 import time
 from wrappers import RobustRewardEnv
+import os
 
 def traj_segment_generator(pi, env, horizon, play=False):
 
@@ -94,20 +95,21 @@ def process_labels(labels):
 
 def train(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8, 
 		optim_batch_size = 256, reg = 1e-2, optim_stepsize = 3e-4, ckpt_dir = None , verbose=True, 
-		hidden_size = 20, reuse = False, horizon = 200, human_dataset='log/Hopper-v2/ryan.npz', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125]):
+		hidden_size = 20, reuse = False, horizon = 200, dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125]):
 	"""
 	returns a trained model on the dataset of human demonstrations 
 	for each quantile
 	"""
 	
-	print("training on data: [{}]".format(human_dataset))
+	filename = 'log/{}/{}.npz'.format(env_name, dataset_name)
+	print("training on data: [{}]".format(filename))
 
 	trained_models = []
 	output_size = 27 if env_name == 'Hopper-v2' else 1
 
 	for q in quantiles:
 		# load data
-		dataset = Dataset(human_dataset, q)
+		dataset = Dataset(filename, q)
 
 		# compile keras model
 		model = mlp_classification(dataset.obs.shape[-1], output_size)
@@ -118,13 +120,13 @@ def train(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8,
 		# transform to one_hot
 		y_train, y_test = process_labels(y_train), process_labels(y_test)
 
-		# add a callback tensorboard object to visualize learning
-		log_dir = './train_' + datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
-		tbCallBack = callbacks.TensorBoard(log_dir=log_dir, histogram_freq=0,  
-          write_graph=True, write_images=True)
+		# # add a callback tensorboard object to visualize learning
+		# log_dir = './train_' + datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
+		# tbCallBack = callbacks.TensorBoard(log_dir=log_dir, histogram_freq=0,  
+        #   write_graph=True, write_images=True)
 
 		# train
-		model.fit(x_train, y_train, validation_split=0.8, callbacks=[tbCallBack])
+		model.fit(x_train, y_train, validation_split=0.8) #, callbacks=[tbCallBack])
 
 		# test accuracy
 		metrics_output = model.evaluate(x_test, y_test)
@@ -132,9 +134,10 @@ def train(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8,
 		test_score = metrics_output[acc_index]
 		print("test score q={}: {}".format(q, test_score))
 
-		# to delete from RAM
-		model.save_weights('model_weights_' + env_name + '_' + str(q) + '.h5')
-
+		# logging weights and model
+		if not os.path.exists('log/models'):
+			os.makedirs('log/models')
+		model.save_weights('log/models/' + dataset_name + '_' + env_name + '_' + str(q) + '.h5')
 		trained_models.append(model)
 
 		del dataset
@@ -163,11 +166,11 @@ def extract_softmax(action):
 	ax3 = (encoding - ax1 - 3 * ax2) // 9
 	return np.array([ax1, ax2, ax3]) - 1
 
-def test(env_name, weights_files_list=None, horizon=None, quantiles=[1.0, .5, .25, .125]):
+def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125]):
 
 	# loading weights
-	if not weights_files_list:
-		weights_files_list = ['model_weights_' + env_name + '_' + str(q) + '.h5' for q in quantiles]
+	weights_files_list = ['log/models/{}_{}_{}.h5'.format(
+						dataset_name, env_name, q) for q in quantiles]
 
 	# loading models
 	models_list = load_models(weights_files_list, env_name)
@@ -199,7 +202,6 @@ def plot(env_name, proxy_file='proxies.npy', perfs_file='perfs.npy'):
 	proxies, perfs = np.load(proxy_file), np.load(perfs_file)
 	qs = [1.0, .5, .25, .125]
 	opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
-	import ipdb; ipdb.set_trace()
 	true_rewards = [np.mean([sum(traj) for traj in perf_arr]) for perf_arr in perfs] + [opt_val[0]]
 	proxy_rewards = [np.mean([sum(traj) for traj in proxy_arr]) for proxy_arr in proxies] + [opt_val[1]]
 	graph_one(true_rewards, proxy_rewards, qs, env_name)
@@ -208,7 +210,7 @@ if __name__=="__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--reg", action="store", default=1e-3, type=float)
 	parser.add_argument("--hidden_size", action="store", default=20, type=int)
-	parser.add_argument("--dataset_path", action="store", default='log/Hopper-v2/ryan.npz', type=str)
+	parser.add_argument("--dataset_name", action="store", default='ryan', type=str)
 	parser.add_argument("--env_name", action="store", default="Hopper-v2", type=str)
 	parser.add_argument("--mode", action="store", default="train", type=str)
 	parser.add_argument('-w','--weights_list', nargs='+', default=None)
@@ -216,11 +218,15 @@ if __name__=="__main__":
 	parser.add_argument("--perf_file", action="store", default='perfs.npy', type=str)
 	args = parser.parse_args()
 	if (args.mode == "train"):
-		train(reg=args.reg, hidden_size=args.hidden_size, human_dataset=args.dataset_path, env_name=args.env_name)
+		train(reg=args.reg, hidden_size=args.hidden_size, dataset_name=args.dataset_name, env_name=args.env_name)
 	elif (args.mode == "test"):
 		test(args.env_name)
 	elif (args.mode == "plot"):
 		plot(args.env_name)
 	elif (args.mode == "testplot"):
+		test(args.env_name)
+		plot(args.env_name)
+	elif (args.mode == "full"):
+		train(reg=args.reg, hidden_size=args.hidden_size, dataset_name=args.dataset_name, env_name=args.env_name)
 		test(args.env_name)
 		plot(args.env_name)

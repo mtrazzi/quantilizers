@@ -5,7 +5,7 @@ import numpy as np
 import cv2
 import os
 
-ENV_BUMPER_AREAS = np.load('data/env_bumper_areas.npy')
+ENV_BUMPER_AREAS = np.load('log/env_bumper_areas.npy')
 
 def true_video_pinball_reward(obs, reward, lamb=1):
     return reward - number_cheat(obs) * lamb
@@ -81,6 +81,7 @@ def graph_one(tr, pr, quantiles,  env_name, m=MaxNLocator, width=.35):
     if not os.path.exists(filename + '.png'):
         os.makedirs('fig')
     plt.savefig(filename)
+    plt.show()
     plt.close() 
 	
 def graph_two(x, y1, y2, xticks, m=MaxNLocator, title="MountainCar"):

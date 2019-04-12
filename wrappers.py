@@ -5,7 +5,7 @@ import argparse
 from datetime import datetime
 from helpers import true_video_pinball_reward, WarpFrame, RunningMean, number_cheat
 
-ENV_BUMPER_AREAS = np.load('data/env_bumper_areas.npy')
+ENV_BUMPER_AREAS = np.load('log/env_bumper_areas.npy')
 
 class RobustRewardEnv(gym.Wrapper):
     """Gym environment wrapper that defines proxy and true rewards.
