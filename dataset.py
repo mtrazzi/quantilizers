@@ -56,9 +56,6 @@ def split_by_quantile(data, q):
     out['rews'] = data['rews'][ind,:]
     out['done'] = data['done'][ind,:]
     out['ep_rets'] = data['ep_rets'][ind]
-    # if not os.path.exists('data/quantiles'):
-    #     os.makedirs('data/quantiles')
-    # np.savez('data/quantiles/{}'.format(q), **out)
     return out
 
 class Dataset(object):
@@ -76,8 +73,7 @@ class Dataset(object):
         # and S is the environment observation/action space.
         # Flatten to (N * L, prod(S))
         self.obs = np.reshape(obs, [-1, np.prod(obs.shape[2:])])
-        self.acs = np.reshape(acs, [-1, 1])
-        #self.acs = np.eye(3)[acs.ravel()] #if we want one-hot
+        self.acs = np.reshape(acs, [-1, np.prod(acs.shape[2:])]) if len(acs.shape) > 2 else np.reshape(acs, [-1, 1])
 
         self.rets = traj_data['ep_rets'][:traj_limitation]
         self.avg_ret = sum(self.rets)/len(self.rets)
@@ -105,7 +101,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--expert_path", type=str, 
-                        default="./data/mountain_car_ryan_1.npz")
+                        default="./log/Hopper-v2/ryan.npz")
     parser.add_argument("--traj_limitation", type=int, default=-1)
     parser.add_argument("--plot", type=bool, default=False)
     args = parser.parse_args()

@@ -5,7 +5,7 @@ import argparse
 from datetime import datetime
 from helpers import true_video_pinball_reward, WarpFrame, RunningMean, number_cheat
 
-ENV_BUMPER_AREAS = np.load('data/env_bumper_areas.npy')
+ENV_BUMPER_AREAS = np.load('log/env_bumper_areas.npy')
 
 class RobustRewardEnv(gym.Wrapper):
     """Gym environment wrapper that defines proxy and true rewards.
@@ -24,6 +24,7 @@ class RobustRewardEnv(gym.Wrapper):
         self.specific_init()
         self.observation_space = self.env.observation_space
         self.action_space = gym.spaces.Discrete(self.num_actions)
+        self.max_episode_steps = self.env.spec.max_episode_steps
 
     def specific_init(self):
         """initializes necessary attributes depending on the environment"""
@@ -46,7 +47,7 @@ class RobustRewardEnv(gym.Wrapper):
             return obs[0]
         elif self.env_name == "Hopper-v2":
             # in obs[4] we have the ankle angle / forward lean
-            return self.running_mean(obs[4]).mean if done else 0
+            return self.running_mean(obs[4]).mean() if done else 0
         elif self.env_name == "VideoPinballNoFrameskip-v4":
             return reward
         else:
@@ -71,12 +72,12 @@ class RobustRewardEnv(gym.Wrapper):
     def step(self, ac):
 
         obs, reward, done, info = self.env.step(ac)
-        proxy_reward = self.proxy_reward(reward, obs, done)
+        proxy_rew = self.proxy_reward(reward, obs, done)
 
         # logging the true reward function (safety performance)
         info['performance'] = self.true_reward(reward, obs, done)
 
-        return obs, proxy_reward, done, info
+        return obs, proxy_rew, done, info
 
     def reset(self, **kwargs):
 

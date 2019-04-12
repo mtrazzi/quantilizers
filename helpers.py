@@ -3,8 +3,9 @@ import matplotlib.pyplot as plt
 import gym
 import numpy as np
 import cv2
+import os
 
-ENV_BUMPER_AREAS = np.load('data/env_bumper_areas.npy')
+ENV_BUMPER_AREAS = np.load('log/env_bumper_areas.npy')
 
 def true_video_pinball_reward(obs, reward, lamb=1):
     return reward - number_cheat(obs) * lamb
@@ -53,7 +54,7 @@ class RunningMean:
     __call__ = new
 
 
-def graph_one(tr, pr, quantiles, m=MaxNLocator, filename='fig/mc.png', width=.35, title="MountainCar"):
+def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, width=.35):
     plt.figure(figsize=(4.3, 3.2))
 
     # True reward
@@ -61,11 +62,13 @@ def graph_one(tr, pr, quantiles, m=MaxNLocator, filename='fig/mc.png', width=.35
     ax1.set_ylabel("True Reward (V)")
     bar1 = ax1.bar(np.arange(len(tr)), tr, width, label="True reward", color='g');
 
+    # Explicit reward
     ax2 = ax1.twinx()
     ax2.set_ylabel("Explicit reward (U)")
     bar2 = ax2.bar(np.arange(len(pr)) + width, pr, width, label="Explicit reward", color='r');
 
-    xticks = ["imitation"] + [str(i) for i in quantiles[1:]] + ["Deep Q"]
+    optimiser = "Deep Q" if env_name == 'MountainCar-v0' else "PPO"
+    xticks = ["imitation"] + [str(i) for i in quantiles[1:]] + [optimiser]
     plt.xticks(np.arange(len(tr))+width/2, xticks)
     plt.xlabel("q values")
     plt.legend(loc='best')
@@ -73,8 +76,12 @@ def graph_one(tr, pr, quantiles, m=MaxNLocator, filename='fig/mc.png', width=.35
     labels = [l.get_label() for l in lines]
     ax1.yaxis.set_major_locator(m(nbins=3))
     ax2.yaxis.set_major_locator(m(nbins=3))
-    print("saving results in {}".format(filename))
+    filename = 'log/fig/{}_{}'.format(dataset_name, env_name)
+    print("saving results in {}.png".format(filename))
+    if not os.path.exists('log/fig'):
+        os.makedirs('log/fig')
     plt.savefig(filename)
+    plt.show()
     plt.close() 
 	
 def graph_two(x, y1, y2, xticks, m=MaxNLocator, title="MountainCar"):
