@@ -56,9 +56,6 @@ def split_by_quantile(data, q):
     out['rews'] = data['rews'][ind,:]
     out['done'] = data['done'][ind,:]
     out['ep_rets'] = data['ep_rets'][ind]
-    # if not os.path.exists('data/quantiles'):
-    #     os.makedirs('data/quantiles')
-    # np.savez('data/quantiles/{}'.format(q), **out)
     return out
 
 class Dataset(object):

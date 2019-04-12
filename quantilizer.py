@@ -17,34 +17,39 @@ from keras.layers import Dense, Dropout, Activation
 from keras.optimizers import SGD
 from keras import callbacks
 from datetime import datetime
-
-def decode_one_hot(action):
-	##
+import time
+from wrappers import RobustRewardEnv
 
 def traj_segment_generator(pi, env, horizon, play=False):
+
 	while True:
-		#ac = env.action_space.sample()
+		ac = env.action_space.sample()
 		ob = env.reset()
-		new = True
-		rew = -1
+		d = True
+		prox_rew = -1.0
+		true_rew = 0
+
 
 		obs = np.zeros((horizon, len(ob)))
-		acs = np.zeros((horizon, 27))
-		news = np.zeros((horizon, 1))
-		rews = np.zeros((horizon, 1))
+		acs = np.zeros((horizon, 3))
+		don = np.zeros((horizon, 1))
+		proxy_rews = np.zeros((horizon, 1))
+		true_rews = np.zeros((horizon, 1))
 		for t in range(horizon):
 			ac = pi(ob)
 			obs[t] = ob
-			import ipdb; ipdb.set_trace()
 			acs[t] = ac
-			news[t] = new
-			rews[t] = rew
-			if t > 1 and new:
+			don[t] = d
+			proxy_rews[t] = prox_rew
+			true_rews[t] = true_rew
+			if t > 1 and d:
 				break
 			if play:
 				env.render()
-			ob, rew, new, _ = env.step(ac)
-		yield {"ob": obs[:t+1], "ac": acs[:t+1], "new":news[:t+1], 'rew':rews[:t+1]}
+			ob, prox_rew, d, info = env.step(ac)
+			true_rew = info['performance']
+		yield {'ob': obs[:t+1], 'ac': acs[:t+1], 'done':don[:t+1],
+				 'proxy_rew':proxy_rews[:t+1], 'true_rew':true_rews[:t+1]}
 
 def get_trajectories(pi, env, horizon, n_trajectories):
 	gen = traj_segment_generator(pi, env, horizon, play=False)
@@ -52,15 +57,17 @@ def get_trajectories(pi, env, horizon, n_trajectories):
 	ob_list = []
 	ac_list = []
 	new_list = []
-	rew_list = []
+	proxy_rew_list = []
+	true_rew_list = []
 
 	for _ in range(n_trajectories):
 		traj = next(gen)
 		ob_list.append(traj['ob'].copy())
 		ac_list.append(traj['ac'].copy())
-		new_list.append(traj['new'].copy())
-		rew_list.append(traj['rew'].copy())
-	return ob_list, ac_list, new_list, rew_list
+		new_list.append(traj['done'].copy())
+		proxy_rew_list.append(traj['proxy_rew'].copy())
+		true_rew_list.append(traj['true_rew'].copy())
+	return ob_list, ac_list, new_list, proxy_rew_list, true_rew_list
 
 def mlp_classification(input_dim, output_size, hidden_size=20):
 	model = Sequential()
@@ -77,6 +84,7 @@ def mlp_classification(input_dim, output_size, hidden_size=20):
 
 def process_labels(labels):
 	"""transforms label array to one hot"""
+
 	labels = labels.astype(int)
 	labels = labels - labels.min()
 	def encoding(array):
@@ -86,15 +94,18 @@ def process_labels(labels):
 
 def train(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8, 
 		optim_batch_size = 256, reg = 1e-2, optim_stepsize = 3e-4, ckpt_dir = None , verbose=True, 
-		hidden_size = 20, reuse = False, horizon = 200, human_dataset='log/Hopper-v2/ryan.npz', env_name='Hopper-v2'):
-	"""returns a trained model on the dataset of human demonstrations for each quantile"""
+		hidden_size = 20, reuse = False, horizon = 200, human_dataset='log/Hopper-v2/ryan.npz', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125]):
+	"""
+	returns a trained model on the dataset of human demonstrations 
+	for each quantile
+	"""
 	
 	print("training on data: [{}]".format(human_dataset))
 
 	trained_models = []
 	output_size = 27 if env_name == 'Hopper-v2' else 1
 
-	for q in [1.0, .5, .25, .125]:
+	for q in quantiles:
 		# load data
 		dataset = Dataset(human_dataset, q)
 
@@ -140,44 +151,58 @@ def load_models(weights_files_list, env_name):
 		models_list.append(model)
 	return models_list
 
-def test(env_name, weights_files_list=None, horizon=None):
+def extract_softmax(action):
+	"""
+	selects action with maximum probability and 
+	transforms it to correct format (inverse process as in process_labels)
+	"""
+
+	encoding = np.argmax(action) # encoding of action in 0..26
+	ax1 = encoding % 3
+	ax2 = ((encoding - ax1) // 3) % 3
+	ax3 = (encoding - ax1 - 3 * ax2) // 9
+	return np.array([ax1, ax2, ax3]) - 1
+
+def test(env_name, weights_files_list=None, horizon=None, quantiles=[1.0, .5, .25, .125]):
 
 	# loading weights
 	if not weights_files_list:
-		qs = [0.125, 0.25, 0.5, 1.0]
-		weights_files_list = ['model_weights_' + env_name + '_' + str(q) + '.h5' for q in qs]
+		weights_files_list = ['model_weights_' + env_name + '_' + str(q) + '.h5' for q in quantiles]
 
 	# loading models
 	models_list = load_models(weights_files_list, env_name)
 
 	# setup
-	env = gym.make(env_name)
+	env = RobustRewardEnv(env_name)
 	proxies, perfs = [], []
 	if not horizon:
-		horizon = env.spec.max_episode_steps
+		horizon = env.max_episode_steps
 
+	print("testing on environment: ", env_name)
 	# for all quantiles, collect trajectories
-	for model in models_list:
+	for model_nb, model in enumerate(models_list):
+		start = time.time()
+		pi = lambda ob: extract_softmax(model.predict(ob.reshape(1,-1)))
+		n_trajectories = 100
+		_, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories)
 
-		pi = lambda ob: model.predict(ob.reshape(1,-1))
-		n_trajectories = 1000
-		ob_list, ac_list, new_list, rew_list = get_trajectories(pi, env, horizon, n_trajectories)
+		proxies.append(proxy_rew_list)
+		perfs.append(true_rew_list)
 
-		# return relevant metrics
-		proxy = [i[:,0].sum() for i in ob_list]
-		perf = [-len(i) for i in ob_list]
+		print("->testing for q={} took {}s".format(quantiles[model_nb], 
+											time.time()-start))
 
-		proxies.append(proxy)
-		perfs.append(perf)
-	
-	return proxies, perfs
+	np.save('proxies', proxies)
+	np.save('perfs', perfs)
 
-def plot(proxies, perfs):
+def plot(env_name, proxy_file='proxies.npy', perfs_file='perfs.npy'):
+	proxies, perfs = np.load(proxy_file), np.load(perfs_file)
 	qs = [1.0, .5, .25, .125]
-	true_rewards = [np.mean(perf_arr) for perf_arr in perfs] + [-180.16]
-	proxy_rewards = [np.mean(proxy_arr) for proxy_arr in proxies] + [-79.79]
-	xticks = ["imitation"] + [str(i) for i in qs[1:]] + ["Deep Q"]
-	graph_one(true_rewards, proxy_rewards, qs)
+	opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
+	import ipdb; ipdb.set_trace()
+	true_rewards = [np.mean([sum(traj) for traj in perf_arr]) for perf_arr in perfs] + [opt_val[0]]
+	proxy_rewards = [np.mean([sum(traj) for traj in proxy_arr]) for proxy_arr in proxies] + [opt_val[1]]
+	graph_one(true_rewards, proxy_rewards, qs, env_name)
 
 if __name__=="__main__":
 	parser = argparse.ArgumentParser()
@@ -187,8 +212,15 @@ if __name__=="__main__":
 	parser.add_argument("--env_name", action="store", default="Hopper-v2", type=str)
 	parser.add_argument("--mode", action="store", default="train", type=str)
 	parser.add_argument('-w','--weights_list', nargs='+', default=None)
+	parser.add_argument("--proxy_file", action="store", default='proxies.npy', type=str)
+	parser.add_argument("--perf_file", action="store", default='perfs.npy', type=str)
 	args = parser.parse_args()
 	if (args.mode == "train"):
 		train(reg=args.reg, hidden_size=args.hidden_size, human_dataset=args.dataset_path, env_name=args.env_name)
 	elif (args.mode == "test"):
 		test(args.env_name)
+	elif (args.mode == "plot"):
+		plot(args.env_name)
+	elif (args.mode == "testplot"):
+		test(args.env_name)
+		plot(args.env_name)
