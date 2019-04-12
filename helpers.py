@@ -54,7 +54,7 @@ class RunningMean:
     __call__ = new
 
 
-def graph_one(tr, pr, quantiles,  env_name, m=MaxNLocator, width=.35):
+def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, width=.35):
     plt.figure(figsize=(4.3, 3.2))
 
     # True reward
@@ -76,10 +76,10 @@ def graph_one(tr, pr, quantiles,  env_name, m=MaxNLocator, width=.35):
     labels = [l.get_label() for l in lines]
     ax1.yaxis.set_major_locator(m(nbins=3))
     ax2.yaxis.set_major_locator(m(nbins=3))
-    filename = 'fig/' + env_name
+    filename = 'log/fig/{}_{}'.format(dataset_name, env_name)
     print("saving results in {}.png".format(filename))
-    if not os.path.exists(filename + '.png'):
-        os.makedirs('fig')
+    if not os.path.exists('log/fig'):
+        os.makedirs('log/fig')
     plt.savefig(filename)
     plt.show()
     plt.close() 

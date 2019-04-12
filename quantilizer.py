@@ -177,11 +177,10 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 
 	# setup
 	env = RobustRewardEnv(env_name)
-	proxies, perfs = [], []
+	proxy_rews, true_rews = [], []
 	if not horizon:
 		horizon = env.max_episode_steps
-
-	print("testing on environment: ", env_name)
+	
 	# for all quantiles, collect trajectories
 	for model_nb, model in enumerate(models_list):
 		start = time.time()
@@ -189,22 +188,26 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 		n_trajectories = 100
 		_, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories)
 
-		proxies.append(proxy_rew_list)
-		perfs.append(true_rew_list)
+		proxy_rews.append(proxy_rew_list)
+		true_rews.append(true_rew_list)
 
 		print("->testing for q={} took {}s".format(quantiles[model_nb], 
 											time.time()-start))
 
-	np.save('proxies', proxies)
-	np.save('perfs', perfs)
+	if not os.path.exists('log/rewards'):
+		os.makedirs('log/rewards')
+	np.save('log/rewards/{}_{}_true'.format(dataset_name, env_name), proxy_rews)
+	np.save('log/rewards/{}_{}_proxy'.format(dataset_name, env_name), true_rews)
 
-def plot(env_name, proxy_file='proxies.npy', perfs_file='perfs.npy'):
-	proxies, perfs = np.load(proxy_file), np.load(perfs_file)
+def plot(env_name, dataset_name):
+	print('log/rewards/{}_{}_true.npy'.format(dataset_name, env_name))
+	proxy_rews_list = np.load('log/rewards/{}_{}_true.npy'.format(dataset_name, env_name))
+	true_rews_list = np.load('log/rewards/{}_{}_proxy.npy'.format(dataset_name, env_name))
 	qs = [1.0, .5, .25, .125]
 	opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
-	true_rewards = [np.mean([sum(traj) for traj in perf_arr]) for perf_arr in perfs] + [opt_val[0]]
-	proxy_rewards = [np.mean([sum(traj) for traj in proxy_arr]) for proxy_arr in proxies] + [opt_val[1]]
-	graph_one(true_rewards, proxy_rewards, qs, env_name)
+	true_rewards = [np.mean([sum(traj) for traj in perf_arr]) for perf_arr in true_rews_list] + [opt_val[0]]
+	proxy_rewards = [np.mean([sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [opt_val[1]]
+	graph_one(true_rewards, proxy_rewards, qs, env_name, dataset_name)
 
 if __name__=="__main__":
 	parser = argparse.ArgumentParser()
@@ -213,20 +216,17 @@ if __name__=="__main__":
 	parser.add_argument("--dataset_name", action="store", default='ryan', type=str)
 	parser.add_argument("--env_name", action="store", default="Hopper-v2", type=str)
 	parser.add_argument("--mode", action="store", default="train", type=str)
-	parser.add_argument('-w','--weights_list', nargs='+', default=None)
-	parser.add_argument("--proxy_file", action="store", default='proxies.npy', type=str)
-	parser.add_argument("--perf_file", action="store", default='perfs.npy', type=str)
 	args = parser.parse_args()
 	if (args.mode == "train"):
 		train(reg=args.reg, hidden_size=args.hidden_size, dataset_name=args.dataset_name, env_name=args.env_name)
 	elif (args.mode == "test"):
-		test(args.env_name)
+		test(args.env_name, dataset_name=args.dataset_name)
 	elif (args.mode == "plot"):
-		plot(args.env_name)
+		plot(args.env_name, args.dataset_name)
 	elif (args.mode == "testplot"):
-		test(args.env_name)
-		plot(args.env_name)
+		test(args.env_name, dataset_name=args.dataset_name)
+		plot(args.env_name, args.dataset_name)
 	elif (args.mode == "full"):
 		train(reg=args.reg, hidden_size=args.hidden_size, dataset_name=args.dataset_name, env_name=args.env_name)
-		test(args.env_name)
-		plot(args.env_name)
+		test(args.env_name, dataset_name=args.dataset_name)
+		plot(args.env_name, args.dataset_name)
