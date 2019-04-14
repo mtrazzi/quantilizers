@@ -4,7 +4,6 @@ import itertools as it
 import argparse
 from datetime import datetime
 from helpers import true_video_pinball_reward, WarpFrame, RunningMean, number_cheat
-import matplotlib.pyplot as plt
 
 ENV_BUMPER_AREAS = np.load('log/env_bumper_areas.npy')
 
