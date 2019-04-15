@@ -90,6 +90,7 @@ class Dataset(object):
         self.dataset = Data(self.obs, self.acs, self.randomize)
         self.q = quantile
         #self.log_info()
+        import ipdb; ipdb.set_trace()
 
     def get_next_batch(self, batch_size):
         return self.dataset.get_next_batch(batch_size)

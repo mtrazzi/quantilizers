@@ -111,7 +111,7 @@ class ClassificationModel(object):
 		return [model.evaluate(x_test, y_test)[acc_index] 
 				for model in self.model_list]
 
-def process_labels(labels):
+def encode_labels(labels):
 	"""transforms label array to one hot"""
 
 	labels = labels.astype(int)
@@ -149,7 +149,7 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 									dataset.acs, train_size=0.8, test_size=0.2)
 		
 		# transform to one_hot
-		y_train, y_test = process_labels(y_train), process_labels(y_test)
+		y_train, y_test = encode_labels(y_train), encode_labels(y_test)
 
 		# train
 		model.fit(x_train, y_train, validation_split=0.2)
@@ -180,10 +180,9 @@ def load_models(weights_files_list, env_name):
 		models_list.append(model)
 	return models_list
 
-def extract_softmax(action):
+def decode_one_hot(action):
 	"""
-	selects action with maximum probability and 
-	transforms it to correct format (inverse process as in process_labels)
+	transforms one_hot into elementary (human) action
 	"""
 
 	encoding = np.argmax(action) # encoding of action in 0..26
@@ -191,6 +190,14 @@ def extract_softmax(action):
 	ax2 = ((encoding - ax1) // 3) % 3
 	ax3 = (encoding - ax1 - 3 * ax2) // 9
 	return np.array([ax1, ax2, ax3]) - 1
+
+def pi_cheat_aux(ob, model):
+	"""outputs the continuous action based on the observation"""
+	cont_encoded_action = model.predict(ob.reshape(1,-1))[0]
+	one_hot_size = len(cont_encoded_action)
+	return np.sum([cont_encoded_action[i] *
+				 decode_one_hot(np.eye(one_hot_size)[i]) 
+				 for i in range(one_hot_size)])
 
 def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125]):
 
@@ -210,7 +217,7 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 	# for all quantiles, collect trajectories
 	for model_nb, model in enumerate(models_list):
 		start = time.time()
-		pi = lambda ob: extract_softmax(model.predict(ob.reshape(1,-1)))
+		pi = lambda ob: pi_cheat_aux(ob, model)
 		n_trajectories = 240
 		_, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories)
 
