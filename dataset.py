@@ -43,11 +43,14 @@ class Data(object):
         self.pointer = end
         return inputs, labels
 
-def split_by_quantile(data, q):
+def split_by_quantile(data, q, env_name='Hopper-v2'):
     """splits the data according to the quantile q of the Dataset"""
     
-    sum_positions = data['obs'][:,:,0].sum(axis=-1)
-    furthest_right = np.argsort(sum_positions)
+    if env_name == 'MountainCar-v0':
+        sum_positions = data['obs'][:,:,0].sum(axis=-1)
+        furthest_right = np.argsort(sum_positions)
+    elif env_name == 'Hopper-v2':
+        furthest_right = np.argsort([np.mean(forward_traj) for forward_traj in      data['obs'][:,:,4]])
     threshold = int(len(data['acs'])*q)
     out = {}
     ind = furthest_right[-threshold:]

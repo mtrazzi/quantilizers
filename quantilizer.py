@@ -137,6 +137,8 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 		# load data
 		dataset = Dataset(filename, quantile=q)
 
+		print("for quantile q={}, the mean of obs[4] was |{}|".format(q, np.mean(dataset.obs[:,4])))
+
 		# compile keras models
 		# model = ClassificationModel(number_classifiers, dataset.obs.shape[-1],
 		# 							logits_per_classifier, dataset_name, env_name, q)
