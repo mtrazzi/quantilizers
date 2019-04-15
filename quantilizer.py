@@ -29,8 +29,6 @@ def traj_segment_generator(pi, env, horizon, play=False):
 		d = True
 		prox_rew = -1.0
 		true_rew = 0
-
-
 		obs = np.zeros((horizon, len(ob)))
 		acs = np.zeros((horizon, 3))
 		don = np.zeros((horizon, 1))
@@ -83,6 +81,35 @@ def mlp_classification(input_dim, output_size, hidden_size=20):
 				metrics=['accuracy'])
 	return model
 
+class ClassificationModel(object):
+	def __init__(self, number_classifiers, input_dim, output_size, dataset_name,
+				env_name, q):
+		self.nb_clf = number_classifiers
+		self.out_siz = output_size
+		self.model_list = [mlp_classification(input_dim, output_size) for _ in range(self.nb_clf)]
+		self.dataset_name = dataset_name
+		self.env_name = env_name
+		self.q = q
+	def filename(self, index):
+		return 'log/models/{}_{}_{}_{}.h5'.format(self.dataset_name, self.env_name, self.q, index)
+	def fit(self, x_train, y_train, validation_split):
+		for index, model in enumerate(self.model_list):
+			model.fit(x_train, y_train[:,index], validation_split)
+	def predict(self, x):
+		return [model.predict(x) for model in self.model_list]
+	def save_weights(self):
+		for index, model in enumerate(self.model_list):
+			model.save_weights(self.filename(index))
+	def load_weights(self):
+		for index, model in enumerate(self.model_list):
+			model.load_weights(self.filename(index))
+	def test_score(self, x_test, y_test, metric='acc'):
+		acc_index = self.model_list[0].metrics_names.index(metric)
+		return [model.evaluate(x_test, y_test)[acc_index] 
+				for model in self.model_list]
+
+
+
 def process_labels(labels):
 	"""transforms label array to one hot"""
 
@@ -105,7 +132,7 @@ def train(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8,
 	print("training on data: [{}]".format(filename))
 
 	trained_models = []
-	output_size = 27 if env_name == 'Hopper-v2' else 1
+	output_size = 27 if env_name == 'Hopper-v2' else 1 #TODO: change this output_size to make it modular when the output_size is different
 
 	for q in quantiles:
 		# load data
