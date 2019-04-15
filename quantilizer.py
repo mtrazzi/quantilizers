@@ -85,10 +85,13 @@ class ClassificationModel(object):
 				env_name, q):
 		self.nb_clf = number_classifiers
 		self.out_siz = output_size
-		self.model_list = [mlp_classification(input_dim, output_size) for _ in range(self.nb_clf)]
+		self.model_list = [mlp_classification(input_dim, output_size) 
+													for _ in range(self.nb_clf)]
 		self.dataset_name = dataset_name
 		self.env_name = env_name
 		self.q = q
+		if not os.path.exists('log/models'):
+			os.makedirs('log/models')
 	def filename(self, index):
 		return 'log/models/{}_{}_{}_{}.h5'.format(self.dataset_name, self.env_name, self.q, index)
 	def fit(self, x_train, y_train, validation_split):
@@ -103,11 +106,10 @@ class ClassificationModel(object):
 		for index, model in enumerate(self.model_list):
 			model.load_weights(self.filename(index))
 	def test_score(self, x_test, y_test, metric='acc'):
+		# We would probably prefer a test score on the tree features at once?
 		acc_index = self.model_list[0].metrics_names.index(metric)
 		return [model.evaluate(x_test, y_test)[acc_index] 
 				for model in self.model_list]
-
-
 
 def process_labels(labels):
 	"""transforms label array to one hot"""
@@ -119,7 +121,7 @@ def process_labels(labels):
 	encoded_labels = np.array([encoding(label) for label in labels])
 	return np.eye(27)[encoded_labels]
 
-def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125]):
+def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125], number_classifiers=3, logits_per_classifier=3):
 	"""
 	returns a trained model on the dataset of human demonstrations 
 	for each quantile
@@ -133,25 +135,22 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 
 	for q in quantiles:
 		# load data
-		dataset = Dataset(filename, q)
+		dataset = Dataset(filename, quantile=q)
 
 		# compile keras models
-		#model = mlp_classification(dataset.obs.shape[-1], output_size)
-		model = ClassificationModel()
+		# model = ClassificationModel(number_classifiers, dataset.obs.shape[-1],
+		# 							logits_per_classifier, dataset_name, env_name, q)
+		model = mlp_classification(dataset.obs.shape[-1], output_size)
 
 		# split data
-		x_train, x_test, y_train, y_test = train_test_split(dataset.obs, dataset.acs, train_size=0.8, test_size=0.2)
+		x_train, x_test, y_train, y_test = train_test_split(dataset.obs, 
+									dataset.acs, train_size=0.8, test_size=0.2)
 		
 		# transform to one_hot
 		y_train, y_test = process_labels(y_train), process_labels(y_test)
 
-		# # add a callback tensorboard object to visualize learning
-		# log_dir = './train_' + datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
-		# tbCallBack = callbacks.TensorBoard(log_dir=log_dir, histogram_freq=0,  
-        #   write_graph=True, write_images=True)
-
 		# train
-		model.fit(x_train, y_train, validation_split=0.8) #, callbacks=[tbCallBack])
+		model.fit(x_train, y_train, validation_split=0.8)
 
 		# test accuracy
 		metrics_output = model.evaluate(x_test, y_test)
@@ -160,9 +159,7 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 		print("test score q={}: {}".format(q, test_score))
 
 		# logging weights and model
-		if not os.path.exists('log/models'):
-			os.makedirs('log/models')
-		model.save_weights('log/models/' + dataset_name + '_' + env_name + '_' + str(q) + '.h5')
+		model.save_weights()
 		trained_models.append(model)
 
 		del dataset
@@ -243,7 +240,7 @@ if __name__=="__main__":
 	parser.add_argument("--mode", action="store", default="train", type=str)
 	args = parser.parse_args()
 	if (args.mode == "train"):
-		train(reg=args.reg, hidden_size=args.hidden_size, dataset_name=args.dataset_name, env_name=args.env_name)
+		train(dataset_name=args.dataset_name, env_name=args.env_name)
 	elif (args.mode == "test"):
 		test(args.env_name, dataset_name=args.dataset_name)
 	elif (args.mode == "plot"):
@@ -252,6 +249,6 @@ if __name__=="__main__":
 		test(args.env_name, dataset_name=args.dataset_name)
 		plot(args.env_name, args.dataset_name)
 	elif (args.mode == "full"):
-		train(reg=args.reg, hidden_size=args.hidden_size, dataset_name=args.dataset_name, env_name=args.env_name)
+		train(dataset_name=args.dataset_name, env_name=args.env_name)
 		test(args.env_name, dataset_name=args.dataset_name)
 		plot(args.env_name, args.dataset_name)
