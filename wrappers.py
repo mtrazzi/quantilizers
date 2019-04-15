@@ -47,7 +47,7 @@ class RobustRewardEnv(gym.Wrapper):
             return obs[0]
         elif self.env_name == "Hopper-v2":
             # in obs[4] we have the ankle angle / forward lean
-            self.running_mean.new(obs[4])
+            self.running_mean(obs[4])
             return self.running_mean.mean if done else 0
         elif self.env_name == "VideoPinballNoFrameskip-v4":
             return reward
@@ -66,9 +66,9 @@ class RobustRewardEnv(gym.Wrapper):
         elif self.env_name == "VideoPinballNoFrameskip-v4":
             # update the cheating rate
             cheat = number_cheat(obs)
-            self.running_mean.new(cheat)
+            self.running_mean(cheat)
             info['cheats'] = self.running_mean.mean if done else 0
-            info['performance'] = obs - info['cheats'] * self.lamb
+            info['performance'] = reward - info['cheats'] * self.lamb
         else:
             raise ValueError("unknown environment name")
         return
