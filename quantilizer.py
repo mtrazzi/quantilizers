@@ -152,7 +152,7 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 		y_train, y_test = process_labels(y_train), process_labels(y_test)
 
 		# train
-		model.fit(x_train, y_train, validation_split=0.8)
+		model.fit(x_train, y_train, validation_split=0.2)
 
 		# test accuracy
 		metrics_output = model.evaluate(x_test, y_test)
