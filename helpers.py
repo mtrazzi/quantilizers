@@ -82,7 +82,7 @@ def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, width=.
         os.makedirs('log/fig')
     plt.savefig(filename)
     plt.show()
-    plt.close() 
+    plt.close()
 	
 def graph_two(x, y1, y2, xticks, m=MaxNLocator, title="MountainCar"):
     #plt.figure(figsize=(6, 5));

@@ -28,7 +28,7 @@ def traj_segment_generator(pi, env, horizon, play=False):
 		ac = env.action_space.sample()
 		ob = env.reset()
 		d = True
-		prox_rew = -1.0
+		prox_rew = 0.0
 		true_rew = 0
 		obs = np.zeros((horizon, len(ob)))
 		acs = np.zeros((horizon, 3))
@@ -159,7 +159,9 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 		print("test score q={}: {}".format(q, test_score))
 
 		# logging weights and model
-		model.save_weights()
+		if not os.path.exists('log/models'):
+			os.makedirs('log/models')
+		model.save_weights('log/models/{}_{}_{}.h5'.format(dataset_name, env_name, q))
 		trained_models.append(model)
 
 		del dataset
@@ -207,7 +209,7 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 	for model_nb, model in enumerate(models_list):
 		start = time.time()
 		pi = lambda ob: extract_softmax(model.predict(ob.reshape(1,-1)))
-		n_trajectories = 100
+		n_trajectories = 240
 		_, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories)
 
 		proxy_rews.append(proxy_rew_list)
@@ -218,16 +220,17 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 
 	if not os.path.exists('log/rewards'):
 		os.makedirs('log/rewards')
-	np.save('log/rewards/{}_{}_true'.format(dataset_name, env_name), proxy_rews)
-	np.save('log/rewards/{}_{}_proxy'.format(dataset_name, env_name), true_rews)
+	np.save('log/rewards/{}_{}_true'.format(dataset_name, env_name), true_rews)
+	np.save('log/rewards/{}_{}_proxy'.format(dataset_name, env_name), 
+	proxy_rews)
 
 def plot(env_name, dataset_name):
 	print('log/rewards/{}_{}_true.npy'.format(dataset_name, env_name))
-	proxy_rews_list = np.load('log/rewards/{}_{}_true.npy'.format(dataset_name, env_name))
-	true_rews_list = np.load('log/rewards/{}_{}_proxy.npy'.format(dataset_name, env_name))
+	proxy_rews_list = np.load('log/rewards/{}_{}_proxy.npy'.format(dataset_name, env_name))
+	true_rews_list = np.load('log/rewards/{}_{}_true.npy'.format(dataset_name, env_name))
 	qs = [1.0, .5, .25, .125]
 	opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
-	true_rewards = [np.mean([sum(traj) for traj in perf_arr]) for perf_arr in true_rews_list] + [opt_val[0]]
+	true_rewards = [np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]]
 	proxy_rewards = [np.mean([sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [opt_val[1]]
 	graph_one(true_rewards, proxy_rewards, qs, env_name, dataset_name)
 
