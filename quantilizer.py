@@ -14,7 +14,8 @@ from helpers import graph_one, graph_two
 import keras
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation
-from keras.optimizers import SGD
+from keras.optimizers import Adam
+from keras import regularizers
 from keras import callbacks
 from datetime import datetime
 import time
@@ -68,16 +69,14 @@ def get_trajectories(pi, env, horizon, n_trajectories):
 		true_rew_list.append(traj['true_rew'].copy())
 	return ob_list, ac_list, new_list, proxy_rew_list, true_rew_list
 
-def mlp_classification(input_dim, output_size, hidden_size=20):
+def mlp_classification(input_dim, output_size, hidden_size=20, reg=1e-4):
 	model = Sequential()
 	model.add(Dense(hidden_size, activation='relu', input_dim=input_dim))
-	model.add(Dropout(0.5))
 	model.add(Dense(hidden_size, activation='relu'))
-	model.add(Dropout(0.5))
-	model.add(Dense(output_size, activation='softmax'))
-	sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
+	model.add(Dense(output_size, kernel_regularizer=regularizers.l2(reg),
+	activation='softmax'))
 	model.compile(loss='categorical_crossentropy',
-				optimizer=sgd,
+				optimizer='adam',
 				metrics=['accuracy'])
 	return model
 
@@ -120,9 +119,7 @@ def process_labels(labels):
 	encoded_labels = np.array([encoding(label) for label in labels])
 	return np.eye(27)[encoded_labels]
 
-def train(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8, 
-		optim_batch_size = 256, reg = 1e-2, optim_stepsize = 3e-4, ckpt_dir = None , verbose=True, 
-		hidden_size = 20, reuse = False, horizon = 200, dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125]):
+def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125]):
 	"""
 	returns a trained model on the dataset of human demonstrations 
 	for each quantile
@@ -138,8 +135,9 @@ def train(g_step = 5, max_iters = 1e5, adam_epsilon=1e-8,
 		# load data
 		dataset = Dataset(filename, q)
 
-		# compile keras model
-		model = mlp_classification(dataset.obs.shape[-1], output_size)
+		# compile keras models
+		#model = mlp_classification(dataset.obs.shape[-1], output_size)
+		model = ClassificationModel()
 
 		# split data
 		x_train, x_test, y_train, y_test = train_test_split(dataset.obs, dataset.acs, train_size=0.8, test_size=0.2)
