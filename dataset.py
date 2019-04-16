@@ -50,7 +50,7 @@ def split_by_quantile(data, q, env_name='Hopper-v2'):
         sum_positions = data['obs'][:,:,0].sum(axis=-1)
         furthest_right = np.argsort(sum_positions)
     elif env_name == 'Hopper-v2':
-        furthest_right = np.argsort([np.mean(forward_traj) for forward_traj in      data['obs'][:,:,4]])
+        furthest_right = np.argsort([np.sum(forward_traj) for forward_traj in      data['obs'][:,:,4]])
     threshold = int(len(data['acs'])*q)
     out = {}
     ind = furthest_right[-threshold:]
@@ -90,7 +90,6 @@ class Dataset(object):
         self.dataset = Data(self.obs, self.acs, self.randomize)
         self.q = quantile
         #self.log_info()
-        import ipdb; ipdb.set_trace()
 
     def get_next_batch(self, batch_size):
         return self.dataset.get_next_batch(batch_size)

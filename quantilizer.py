@@ -21,8 +21,10 @@ from datetime import datetime
 import time
 from wrappers import RobustRewardEnv
 import os
+from sklearn.neural_network import MLPClassifier
+from joblib import dump, load
 
-def traj_segment_generator(pi, env, horizon, play=False):
+def traj_segment_generator(pi, env, horizon, play=True):
 
 	while True:
 		ac = env.action_space.sample()
@@ -45,14 +47,14 @@ def traj_segment_generator(pi, env, horizon, play=False):
 			if t > 1 and d:
 				break
 			if play:
-				env.render()
+				env.env.render()
 			ob, prox_rew, d, info = env.step(ac)
 			true_rew = info['performance']
 		yield {'ob': obs[:t+1], 'ac': acs[:t+1], 'done':don[:t+1],
 				 'proxy_rew':proxy_rews[:t+1], 'true_rew':true_rews[:t+1]}
 
-def get_trajectories(pi, env, horizon, n_trajectories):
-	gen = traj_segment_generator(pi, env, horizon, play=False)
+def get_trajectories(pi, env, horizon, n_trajectories, play=False):
+	gen = traj_segment_generator(pi, env, horizon, play)
 
 	ob_list = []
 	ac_list = []
@@ -82,34 +84,65 @@ def mlp_classification(input_dim, output_size, hidden_size=20, reg=1e-4):
 
 class ClassificationModel(object):
 	def __init__(self, number_classifiers, input_dim, output_size, dataset_name,
-				env_name, q):
-		self.nb_clf = number_classifiers
-		self.out_siz = output_size
-		self.model_list = [mlp_classification(input_dim, output_size) 
-													for _ in range(self.nb_clf)]
+				env_name, q, framework='keras', reg=1e-4, hidden_size=20):
+		self.framework = framework
 		self.dataset_name = dataset_name
 		self.env_name = env_name
 		self.q = q
+		self.reg = reg
+		self.nb_clf = number_classifiers
+		self.input_dim = input_dim
+		self.output_size = output_size
+		self.hidden_size = hidden_size
+		self.model_list = self.init_models()
 		if not os.path.exists('log/models'):
 			os.makedirs('log/models')
+
+	def init_models(self):
+		if self.framework == 'keras':
+			return [mlp_classification(self.input_dim, self.output_size, reg=self.reg) for _ in range(self.nb_clf)]
+		elif self.framework == 'sklearn':
+			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), alpha=self.reg) for _ in range(self.nb_clf)]
+
 	def filename(self, index):
 		return 'log/models/{}_{}_{}_{}.h5'.format(self.dataset_name, self.env_name, self.q, index)
-	def fit(self, x_train, y_train, validation_split):
+
+	def fit(self, x_train, y_train, validation_split=0.2):
 		for index, model in enumerate(self.model_list):
-			model.fit(x_train, y_train[:,index], validation_split)
+			if self.framework == 'keras':
+				model.fit(x_train, y_train[:,index], validation_split)
+			elif self.framework == 'sklearn':
+				model.fit(x_train, y_train[:, index])
+				train_score = model.score(x_train, y_train[:, index])
+				print("train score q={}: {}".format(self.q, train_score))
+
 	def predict(self, x):
 		return [model.predict(x) for model in self.model_list]
+
 	def save_weights(self):
 		for index, model in enumerate(self.model_list):
-			model.save_weights(self.filename(index))
+			path = self.filename(index)
+			if self.framework == 'keras':
+				model.save_weights(path)
+			elif self.framework == 'sklearn':
+				dump(model, path)
+
 	def load_weights(self):
 		for index, model in enumerate(self.model_list):
-			model.load_weights(self.filename(index))
-	def test_score(self, x_test, y_test, metric='acc'):
-		# We would probably prefer a test score on the tree features at once?
-		acc_index = self.model_list[0].metrics_names.index(metric)
-		return [model.evaluate(x_test, y_test)[acc_index] 
-				for model in self.model_list]
+			path = self.filename(index)
+			if self.framework == 'keras':
+				model.load_weights(path)
+			elif self.framework == 'sklearn':
+				self.model_list[index] = load(path)
+
+	def test(self, x_test, y_test, metric='acc'):
+		for index, model in enumerate(self.model_list):
+			if self.framework == 'keras':
+				acc_index = self.model_list[0].metrics_names.index(metric)
+				print(model.evaluate(x_test, y_test)[acc_index])
+			elif self.framework == 'sklearn':
+				test_score = model.score(x_test, y_test[:, index])
+				print("test score q={}: {}".format(self.q, test_score))
 
 def encode_labels(labels):
 	"""transforms label array to one hot"""
@@ -121,7 +154,7 @@ def encode_labels(labels):
 	encoded_labels = np.array([encoding(label) for label in labels])
 	return np.eye(27)[encoded_labels]
 
-def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125], number_classifiers=3, logits_per_classifier=3):
+def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125], number_classifiers=3, framework='sklearn'):
 	"""
 	returns a trained model on the dataset of human demonstrations 
 	for each quantile
@@ -131,39 +164,27 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 	print("training on data: [{}]".format(filename))
 
 	trained_models = []
-	output_size = 27 if env_name == 'Hopper-v2' else 1 #TODO: change this output_size to make it modular when the output_size is different
 
 	for q in quantiles:
 		# load data
 		dataset = Dataset(filename, quantile=q)
 
-		print("for quantile q={}, the mean of obs[4] was |{}|".format(q, np.mean(dataset.obs[:,4])))
-
 		# compile keras models
-		# model = ClassificationModel(number_classifiers, dataset.obs.shape[-1],
-		# 							logits_per_classifier, dataset_name, env_name, q)
-		model = mlp_classification(dataset.obs.shape[-1], output_size)
+		model = ClassificationModel(number_classifiers, dataset.obs.shape[-1],
+		 						dataset.acs.shape[-1], dataset_name, env_name,q=q, framework=framework)
 
 		# split data
 		x_train, x_test, y_train, y_test = train_test_split(dataset.obs, 
 									dataset.acs, train_size=0.8, test_size=0.2)
-		
-		# transform to one_hot
-		y_train, y_test = encode_labels(y_train), encode_labels(y_test)
 
 		# train
-		model.fit(x_train, y_train, validation_split=0.2)
+		model.fit(x_train, y_train)
 
 		# test accuracy
-		metrics_output = model.evaluate(x_test, y_test)
-		acc_index = model.metrics_names.index('acc')
-		test_score = metrics_output[acc_index]
-		print("test score q={}: {}".format(q, test_score))
+		model.test(x_test, y_test)
 
 		# logging weights and model
-		if not os.path.exists('log/models'):
-			os.makedirs('log/models')
-		model.save_weights('log/models/{}_{}_{}.h5'.format(dataset_name, env_name, q))
+		model.save_weights()
 		trained_models.append(model)
 
 		del dataset
@@ -199,14 +220,13 @@ def pi_cheat_aux(ob, model):
 				 decode_one_hot(np.eye(one_hot_size)[i]) 
 				 for i in range(one_hot_size)])
 
-def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125]):
-
-	# loading weights
-	weights_files_list = ['log/models/{}_{}_{}.h5'.format(
-						dataset_name, env_name, q) for q in quantiles]
+def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125], number_classifiers=3, framework='sklearn'):
 
 	# loading models
-	models_list = load_models(weights_files_list, env_name)
+	obs_dim, acs_dim = (2, 1) if env_name == 'MountainCar-v0' else (11, 27)
+	models_list = [ClassificationModel(number_classifiers, obs_dim, acs_dim, dataset_name, env_name,q=q, framework=framework) for q in quantiles]
+	for model in models_list:
+		model.load_weights()
 
 	# setup
 	env = RobustRewardEnv(env_name)
@@ -219,7 +239,7 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 		start = time.time()
 		pi = lambda ob: pi_cheat_aux(ob, model)
 		n_trajectories = 240
-		_, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories)
+		ob_list, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=True)
 
 		proxy_rews.append(proxy_rew_list)
 		true_rews.append(true_rew_list)
@@ -228,7 +248,7 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 											time.time()-start))
 
 	if not os.path.exists('log/rewards'):
-		os.makedirs('log/rewards')
+		os.makedirs('log/rewards')	
 	np.save('log/rewards/{}_{}_true'.format(dataset_name, env_name), true_rews)
 	np.save('log/rewards/{}_{}_proxy'.format(dataset_name, env_name), 
 	proxy_rews)
