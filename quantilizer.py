@@ -84,7 +84,7 @@ def mlp_classification(input_dim, output_size, hidden_size=20, reg=1e-4):
 
 class ClassificationModel(object):
 	def __init__(self, number_classifiers, input_dim, output_size, dataset_name,
-				env_name, q, framework='sklearn', reg=1e-4, hidden_size=20):
+				env_name, q, framework='sklearn', reg=1e-4, hidden_size=20, aggregate_method='continuous'):
 		self.framework = framework
 		self.dataset_name = dataset_name
 		self.env_name = env_name
@@ -95,6 +95,7 @@ class ClassificationModel(object):
 		self.output_size = output_size
 		self.hidden_size = hidden_size
 		self.model_list = self.init_models()
+		self.aggregate_method = aggregate_method
 		if not os.path.exists('log/models'):
 			os.makedirs('log/models')
 	def init_models(self):
@@ -120,7 +121,12 @@ class ClassificationModel(object):
 			#TODO: figure out what to do with keras models
 			return 0
 		elif self.framework == 'sklearn':
-			return [(clf.classes_ * clf.predict_proba(x.reshape(1, -1)).ravel()).sum() for clf in self.model_list]
+			if self.aggregate_method == 'continuous':
+				return [(clf.classes_ * clf.predict_proba(x.reshape(1, -1)).ravel()).sum() for clf in self.model_list]
+			elif self.aggregate_method == 'argmax':
+				return [(clf.classes_ * clf.predict(x.reshape(1, -1)).ravel()).sum() for clf in self.model_list]
+			elif self.aggregate_method == 'sample':
+				return [(clf.classes_ * (clf.predict_proba(x.reshape(1, -1)) < [np.random.random() for _ in range(len(clf.classes_))]).ravel()).sum() for clf in self.model_list]
 
 	def save_weights(self):
 		for index, model in enumerate(self.model_list):
@@ -227,7 +233,7 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 
 	# loading models
 	obs_dim, acs_dim = (2, 1) if env_name == 'MountainCar-v0' else (11, 27)
-	models_list = [ClassificationModel(number_classifiers, obs_dim, acs_dim, dataset_name, env_name,q=q, framework=framework) for q in quantiles]
+	models_list = [ClassificationModel(number_classifiers, obs_dim, acs_dim, dataset_name, env_name,q=q, framework=framework, aggregate_method='continuous') for q in quantiles]
 	for model in models_list:
 		model.load_weights()
 
@@ -245,8 +251,8 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 			pi = lambda ob: pi_cheat_aux(ob, model)
 		elif model.framework == 'sklearn':
 			pi = lambda ob: model.predict(ob)
-		n_trajectories = 240
-		ob_list, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=False)
+		n_trajectories = 240 
+		ob_list, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=True)
 
 		proxy_rews.append(proxy_rew_list)
 		true_rews.append(true_rew_list)
