@@ -38,7 +38,7 @@ def traj_segment_generator(pi, env, horizon, play=True):
 		proxy_rews = np.zeros((horizon, 1))
 		true_rews = np.zeros((horizon, 1))
 		for t in range(horizon):
-			ac = pi(ob)
+			ac = pi([ob])
 			obs[t] = ob
 			acs[t] = ac
 			don[t] = d
@@ -84,25 +84,24 @@ def mlp_classification(input_dim, output_size, hidden_size=20, reg=1e-4):
 
 class ClassificationModel(object):
 	def __init__(self, number_classifiers, input_dim, output_size, dataset_name,
-				env_name, q, framework='keras', reg=1e-4, hidden_size=20):
+				env_name, q, framework='sklearn', reg=1e-4, hidden_size=20):
 		self.framework = framework
 		self.dataset_name = dataset_name
 		self.env_name = env_name
 		self.q = q
 		self.reg = reg
-		self.nb_clf = number_classifiers
+		self.nb_model = number_classifiers
 		self.input_dim = input_dim
 		self.output_size = output_size
 		self.hidden_size = hidden_size
 		self.model_list = self.init_models()
 		if not os.path.exists('log/models'):
 			os.makedirs('log/models')
-
 	def init_models(self):
 		if self.framework == 'keras':
-			return [mlp_classification(self.input_dim, self.output_size, reg=self.reg) for _ in range(self.nb_clf)]
+			return [mlp_classification(self.input_dim, self.output_size, reg=self.reg) for _ in range(self.nb_model)]
 		elif self.framework == 'sklearn':
-			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), alpha=self.reg) for _ in range(self.nb_clf)]
+			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), alpha=self.reg) for _ in range(self.nb_model)]
 
 	def filename(self, index):
 		return 'log/models/{}_{}_{}_{}.h5'.format(self.dataset_name, self.env_name, self.q, index)
@@ -237,8 +236,12 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 	# for all quantiles, collect trajectories
 	for model_nb, model in enumerate(models_list):
 		start = time.time()
-		pi = lambda ob: pi_cheat_aux(ob, model)
-		n_trajectories = 240
+		if model.framework == 'keras':
+			pi = lambda ob: pi_cheat_aux(ob, model)
+		elif model.framework == 'sklearn':
+			pi = lambda ob: [(model.classes_ * model.predict_proba(ob.reshape(1, -1)).ravel()).sum() for model in models]
+			pi = lambda ob: model.predict(ob)
+		n_trajectories = 50
 		ob_list, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=True)
 
 		proxy_rews.append(proxy_rew_list)
