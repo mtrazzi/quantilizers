@@ -38,7 +38,7 @@ def traj_segment_generator(pi, env, horizon, play=True):
 		proxy_rews = np.zeros((horizon, 1))
 		true_rews = np.zeros((horizon, 1))
 		for t in range(horizon):
-			ac = pi([ob])
+			ac = pi(ob)
 			obs[t] = ob
 			acs[t] = ac
 			don[t] = d
@@ -116,7 +116,11 @@ class ClassificationModel(object):
 				print("train score q={}: {}".format(self.q, train_score))
 
 	def predict(self, x):
-		return [model.predict(x) for model in self.model_list]
+		if self.framework == 'keras':
+			#TODO: figure out what to do with keras models
+			return 0
+		elif self.framework == 'sklearn':
+			return [(clf.classes_ * clf.predict_proba(x.reshape(1, -1)).ravel()).sum() for clf in self.model_list]
 
 	def save_weights(self):
 		for index, model in enumerate(self.model_list):
@@ -236,13 +240,13 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 	# for all quantiles, collect trajectories
 	for model_nb, model in enumerate(models_list):
 		start = time.time()
+		print('model.framework is:', model.framework)
 		if model.framework == 'keras':
 			pi = lambda ob: pi_cheat_aux(ob, model)
 		elif model.framework == 'sklearn':
-			pi = lambda ob: [(model.classes_ * model.predict_proba(ob.reshape(1, -1)).ravel()).sum() for model in models]
 			pi = lambda ob: model.predict(ob)
-		n_trajectories = 50
-		ob_list, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=True)
+		n_trajectories = 240
+		ob_list, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=False)
 
 		proxy_rews.append(proxy_rew_list)
 		true_rews.append(true_rew_list)
