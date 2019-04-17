@@ -114,16 +114,17 @@ class ClassificationModel(object):
 	def fit(self, x_train, y_train):
 		for index, model in enumerate(self.model_list):
 			if self.framework == 'keras':
-				model.fit(x_train, to_categorical(y_train[:,index], num_classes=3))
+				model.fit(x_train, to_categorical(y_train[:,index] - y_train[:,index].min(), num_classes=3))
 			elif self.framework == 'sklearn':
 				model.fit(x_train, y_train[:, index])
 				train_score = model.score(x_train, y_train[:, index])
 				print("train score q={}: {}".format(self.q, train_score))
 
 	def predict(self, x):
+		classes = np.array([-1,0,1]) if self.env_name == 'Hopper-v2' else 0 #TODO: fix this for MountainCar-v0 or make this more modular using keras
 		if self.framework == 'keras':
-			#TODO: figure out what to do with keras models
-			return 0
+				if self.aggregate_method == 'continuous':
+					return [(classes * clf.predict(x.reshape(1, -1)).ravel()).sum() for clf in self.model_list]
 		elif self.framework == 'sklearn':
 			if self.aggregate_method == 'continuous':
 				return [(clf.classes_ * clf.predict_proba(x.reshape(1, -1)).ravel()).sum() for clf in self.model_list]
@@ -198,9 +199,6 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 			# train
 			model.fit(dataset.obs, dataset.acs)
 
-			# test accuracy
-			#model.test(x_test, y_test)
-
 			# logging weights and model
 			model.save_weights()
 			trained_models.append(model)
@@ -257,13 +255,9 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 		# for all quantiles, collect trajectories
 		for model_nb, model in enumerate(models_list):
 			start = time.time()
-			print('model.framework is:', model.framework)
-			if model.framework == 'keras':
-				pi = lambda ob: pi_cheat_aux(ob, model)
-			elif model.framework == 'sklearn':
-				pi = lambda ob: model.predict(ob)
+			pi = lambda ob: model.predict(ob)
 			n_trajectories = 240 
-			_, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=False)
+			_, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=True)
 
 			proxy_rews.append(proxy_rew_list)
 			true_rews.append(true_rew_list)
