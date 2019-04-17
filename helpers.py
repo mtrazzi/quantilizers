@@ -4,6 +4,7 @@ import gym
 import numpy as np
 import cv2
 import os
+from datetime import datetime
 
 ENV_BUMPER_AREAS = np.load('log/env_bumper_areas.npy')
 
@@ -76,12 +77,12 @@ def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, width=.
     labels = [l.get_label() for l in lines]
     ax1.yaxis.set_major_locator(m(nbins=3))
     ax2.yaxis.set_major_locator(m(nbins=3))
-    filename = 'log/fig/{}_{}'.format(dataset_name, env_name)
+    filename = 'log/fig/{}_{}_{}'.format(dataset_name, env_name,datetime.now().strftime("%m%d-%H%M%S"))
     print("saving results in {}.png".format(filename))
     if not os.path.exists('log/fig'):
         os.makedirs('log/fig')
     plt.savefig(filename)
-    plt.show()
+    # plt.show()
     plt.close()
 	
 def graph_two(x, y1, y2, xticks, m=MaxNLocator, title="MountainCar"):

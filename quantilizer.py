@@ -23,6 +23,8 @@ from wrappers import RobustRewardEnv
 import os
 from sklearn.neural_network import MLPClassifier
 from joblib import dump, load
+from datetime import datetime
+import random
 
 def traj_segment_generator(pi, env, horizon, play=True):
 
@@ -84,7 +86,7 @@ def mlp_classification(input_dim, output_size, hidden_size=20, reg=1e-4):
 
 class ClassificationModel(object):
 	def __init__(self, number_classifiers, input_dim, output_size, dataset_name,
-				env_name, q, framework='sklearn', reg=1e-4, hidden_size=20, aggregate_method='continuous'):
+				env_name, q, framework='sklearn', reg=1e-4, hidden_size=20, aggregate_method='continuous', seed=0):
 		self.framework = framework
 		self.dataset_name = dataset_name
 		self.env_name = env_name
@@ -94,6 +96,7 @@ class ClassificationModel(object):
 		self.input_dim = input_dim
 		self.output_size = output_size
 		self.hidden_size = hidden_size
+		self.seed = seed
 		self.model_list = self.init_models()
 		self.aggregate_method = aggregate_method
 		if not os.path.exists('log/models'):
@@ -102,10 +105,10 @@ class ClassificationModel(object):
 		if self.framework == 'keras':
 			return [mlp_classification(self.input_dim, self.output_size, reg=self.reg) for _ in range(self.nb_model)]
 		elif self.framework == 'sklearn':
-			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), alpha=self.reg) for _ in range(self.nb_model)]
+			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), alpha=self.reg, random_state=self.seed) for _ in range(self.nb_model)]
 
 	def filename(self, index):
-		return 'log/models/{}_{}_{}_{}.h5'.format(self.dataset_name, self.env_name, self.q, index)
+		return 'log/models/{}_{}_{}_{}_{}.h5'.format(self.dataset_name, self.env_name, self.q, index, self.seed)
 
 	def fit(self, x_train, y_train, validation_split=0.2):
 		for index, model in enumerate(self.model_list):
@@ -163,7 +166,7 @@ def encode_labels(labels):
 	encoded_labels = np.array([encoding(label) for label in labels])
 	return np.eye(27)[encoded_labels]
 
-def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125], number_classifiers=3, framework='sklearn'):
+def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125], number_classifiers=3, framework='sklearn', seed_min=0, seed_nb=1):
 	"""
 	returns a trained model on the dataset of human demonstrations 
 	for each quantile
@@ -174,31 +177,36 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 
 	trained_models = []
 
-	for q in quantiles:
-		# load data
-		dataset = Dataset(filename, quantile=q)
+	for seed in range(seed_min, seed_min + seed_nb):
 
-		# compile keras models
-		model = ClassificationModel(number_classifiers, dataset.obs.shape[-1],
-		 						dataset.acs.shape[-1], dataset_name, env_name,q=q, framework=framework)
+		print("\n\n########## TRAINING FOR SEED #{} ##########".format(seed))
 
-		# split data
-		x_train, x_test, y_train, y_test = train_test_split(dataset.obs, 
-									dataset.acs, train_size=0.8, test_size=0.2)
+		for q in quantiles:
+			# load data
+			dataset = Dataset(filename, quantile=q)
 
-		# train
-		model.fit(x_train, y_train)
+			# compile keras models
+			model = ClassificationModel(number_classifiers, 
+										dataset.obs.shape[-1],
+										dataset.acs.shape[-1], 
+										dataset_name, 
+										env_name,
+										q=q, 
+										framework=framework, 
+										seed=seed)
 
-		# test accuracy
-		model.test(x_test, y_test)
 
-		# logging weights and model
-		model.save_weights()
-		trained_models.append(model)
+			# train
+			model.fit(dataset.obs, dataset.acs)
 
-		del dataset
+			# test accuracy
+			#model.test(x_test, y_test)
 
-	return trained_models
+			# logging weights and model
+			model.save_weights()
+			trained_models.append(model)
+
+			del dataset
 
 def load_models(weights_files_list, env_name):
 	obs_dim, acs_dim = (2, 1) if env_name == 'MountainCar-v0' else (11, 27)
@@ -229,52 +237,57 @@ def pi_cheat_aux(ob, model):
 				 decode_one_hot(np.eye(one_hot_size)[i]) 
 				 for i in range(one_hot_size)])
 
-def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125], number_classifiers=3, framework='sklearn'):
+def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125], number_classifiers=3, framework='sklearn', seed_min=0, seed_nb=1):
+		
 
-	# loading models
-	obs_dim, acs_dim = (2, 1) if env_name == 'MountainCar-v0' else (11, 27)
-	models_list = [ClassificationModel(number_classifiers, obs_dim, acs_dim, dataset_name, env_name,q=q, framework=framework, aggregate_method='continuous') for q in quantiles]
-	for model in models_list:
-		model.load_weights()
+	for seed in range(seed_min, seed_min + seed_nb):
 
-	# setup
-	env = RobustRewardEnv(env_name)
-	proxy_rews, true_rews = [], []
-	if not horizon:
-		horizon = env.max_episode_steps
+		print("\n\n########## TESTING FOR SEED #{} ##########".format(seed))
+		
+		# loading models
+		obs_dim, acs_dim = (2, 1) if env_name == 'MountainCar-v0' else (11, 27)
+		models_list = [ClassificationModel(number_classifiers, obs_dim, acs_dim, dataset_name, env_name,q=q, framework=framework, aggregate_method='continuous') for q in quantiles]
+		for model in models_list:
+			model.load_weights()
+
+		# setup
+		env = RobustRewardEnv(env_name)
+		proxy_rews, true_rews = [], []
+		if not horizon:
+			horizon = env.max_episode_steps
 	
-	# for all quantiles, collect trajectories
-	for model_nb, model in enumerate(models_list):
-		start = time.time()
-		print('model.framework is:', model.framework)
-		if model.framework == 'keras':
-			pi = lambda ob: pi_cheat_aux(ob, model)
-		elif model.framework == 'sklearn':
-			pi = lambda ob: model.predict(ob)
-		n_trajectories = 240 
-		ob_list, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=True)
+		# for all quantiles, collect trajectories
+		for model_nb, model in enumerate(models_list):
+			start = time.time()
+			print('model.framework is:', model.framework)
+			if model.framework == 'keras':
+				pi = lambda ob: pi_cheat_aux(ob, model)
+			elif model.framework == 'sklearn':
+				pi = lambda ob: model.predict(ob)
+			n_trajectories = 240 
+			ob_list, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=False)
 
-		proxy_rews.append(proxy_rew_list)
-		true_rews.append(true_rew_list)
+			proxy_rews.append(proxy_rew_list)
+			true_rews.append(true_rew_list)
 
-		print("->testing for q={} took {}s".format(quantiles[model_nb], 
-											time.time()-start))
+			print("->testing for q={} took {}s".format(quantiles[model_nb], 
+												time.time()-start))
 
-	if not os.path.exists('log/rewards'):
-		os.makedirs('log/rewards')	
-	np.save('log/rewards/{}_{}_true'.format(dataset_name, env_name), true_rews)
-	np.save('log/rewards/{}_{}_proxy'.format(dataset_name, env_name), 
-	proxy_rews)
+		if not os.path.exists('log/rewards'):
+			os.makedirs('log/rewards')	
+		np.save('log/rewards/{}_{}_{}_true'.format(dataset_name, env_name, seed), true_rews)
+		np.save('log/rewards/{}_{}_{}_proxy'.format(dataset_name, env_name, seed), 
+		proxy_rews)
 
-def plot(env_name, dataset_name):
-	print('log/rewards/{}_{}_true.npy'.format(dataset_name, env_name))
-	proxy_rews_list = np.load('log/rewards/{}_{}_proxy.npy'.format(dataset_name, env_name))
-	true_rews_list = np.load('log/rewards/{}_{}_true.npy'.format(dataset_name, env_name))
-	qs = [1.0, .5, .25, .125]
-	opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
-	true_rewards = [np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]]
-	proxy_rewards = [np.mean([sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [opt_val[1]]
-	graph_one(true_rewards, proxy_rewards, qs, env_name, dataset_name)
+def plot(env_name, dataset_name, seed_min=0, seed_nb=1):
+	for seed in range(seed_min, seed_min + seed_nb):
+		proxy_rews_list = np.load('log/rewards/{}_{}_{}_proxy.npy'.format(dataset_name, env_name, seed))
+		true_rews_list = np.load('log/rewards/{}_{}_{}_true.npy'.format(dataset_name, env_name, seed))
+		qs = [1.0, .5, .25, .125]
+		opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
+		true_rewards = [np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]]
+		proxy_rewards = [np.mean([sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [opt_val[1]]
+		graph_one(true_rewards, proxy_rewards, qs, env_name, dataset_name)
 
 if __name__=="__main__":
 	parser = argparse.ArgumentParser()
@@ -283,17 +296,19 @@ if __name__=="__main__":
 	parser.add_argument("--dataset_name", action="store", default='ryan', type=str)
 	parser.add_argument("--env_name", action="store", default="Hopper-v2", type=str)
 	parser.add_argument("--mode", action="store", default="train", type=str)
+	parser.add_argument("--seed_min", action="store", default=0, type=int)
+	parser.add_argument("--seed_nb", action="store", default=1, type=int)
 	args = parser.parse_args()
 	if (args.mode == "train"):
-		train(dataset_name=args.dataset_name, env_name=args.env_name)
+		train(dataset_name=args.dataset_name, env_name=args.env_name, seed_min=args.seed_min, seed_nb=args.seed_nb)
 	elif (args.mode == "test"):
-		test(args.env_name, dataset_name=args.dataset_name)
+		test(args.env_name, dataset_name=args.dataset_name, seed_nb=args.seed_nb)
 	elif (args.mode == "plot"):
-		plot(args.env_name, args.dataset_name)
+		plot(args.env_name, args.dataset_name, seed_nb=args.seed_nb)
 	elif (args.mode == "testplot"):
 		test(args.env_name, dataset_name=args.dataset_name)
-		plot(args.env_name, args.dataset_name)
+		plot(args.env_name, args.dataset_name, seed_nb=args.seed_nb)
 	elif (args.mode == "full"):
-		train(dataset_name=args.dataset_name, env_name=args.env_name)
-		test(args.env_name, dataset_name=args.dataset_name)
-		plot(args.env_name, args.dataset_name)
+		train(dataset_name=args.dataset_name, env_name=args.env_name, seed_min=args.seed_min, seed_nb=args.seed_nb)
+		test(args.env_name, dataset_name=args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb)
+		plot(args.env_name, args.dataset_name,seed_nb=args.seed_nb)
