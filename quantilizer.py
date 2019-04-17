@@ -108,12 +108,12 @@ class ClassificationModel(object):
 			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), alpha=self.reg, random_state=self.seed) for _ in range(self.nb_model)]
 
 	def filename(self, index):
-		return 'log/models/{}_{}_{}_{}_{}.h5'.format(self.dataset_name, self.env_name, self.q, index, self.seed)
+		return 'log/models/{}_{}_{}_{}_{}_{}.h5'.format(self.dataset_name, self.env_name, self.q, index, self.framework, self.seed)
 
-	def fit(self, x_train, y_train, validation_split=0.2):
+	def fit(self, x_train, y_train):
 		for index, model in enumerate(self.model_list):
 			if self.framework == 'keras':
-				model.fit(x_train, y_train[:,index], validation_split)
+				model.fit(x_train, y_train[:,index])
 			elif self.framework == 'sklearn':
 				model.fit(x_train, y_train[:, index])
 				train_score = model.score(x_train, y_train[:, index])
@@ -265,7 +265,7 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 			elif model.framework == 'sklearn':
 				pi = lambda ob: model.predict(ob)
 			n_trajectories = 240 
-			ob_list, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=False)
+			_, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=False)
 
 			proxy_rews.append(proxy_rew_list)
 			true_rews.append(true_rew_list)
@@ -275,14 +275,14 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 
 		if not os.path.exists('log/rewards'):
 			os.makedirs('log/rewards')	
-		np.save('log/rewards/{}_{}_{}_true'.format(dataset_name, env_name, seed), true_rews)
-		np.save('log/rewards/{}_{}_{}_proxy'.format(dataset_name, env_name, seed), 
+		np.save('log/rewards/{}_{}_{}_{}_true'.format(dataset_name, env_name, framework, seed), true_rews)
+		np.save('log/rewards/{}_{}_{}_{}_proxy'.format(dataset_name, env_name, framework, seed), 
 		proxy_rews)
 
-def plot(env_name, dataset_name, seed_min=0, seed_nb=1):
+def plot(env_name, dataset_name, seed_min=0, seed_nb=1, framework='sklearn'):
 	for seed in range(seed_min, seed_min + seed_nb):
-		proxy_rews_list = np.load('log/rewards/{}_{}_{}_proxy.npy'.format(dataset_name, env_name, seed))
-		true_rews_list = np.load('log/rewards/{}_{}_{}_true.npy'.format(dataset_name, env_name, seed))
+		proxy_rews_list = np.load('log/rewards/{}_{}_{}_{}_proxy.npy'.format(dataset_name, env_name, framework, seed))
+		true_rews_list = np.load('log/rewards/{}_{}_{}_{}_true.npy'.format(dataset_name, env_name, framework, seed))
 		qs = [1.0, .5, .25, .125]
 		opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
 		true_rewards = [np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]]
@@ -298,17 +298,18 @@ if __name__=="__main__":
 	parser.add_argument("--mode", action="store", default="train", type=str)
 	parser.add_argument("--seed_min", action="store", default=0, type=int)
 	parser.add_argument("--seed_nb", action="store", default=1, type=int)
+	parser.add_argument("--framework", action="store", default="keras", type=str)
 	args = parser.parse_args()
 	if (args.mode == "train"):
-		train(dataset_name=args.dataset_name, env_name=args.env_name, seed_min=args.seed_min, seed_nb=args.seed_nb)
+		train(dataset_name=args.dataset_name, env_name=args.env_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework)
 	elif (args.mode == "test"):
-		test(args.env_name, dataset_name=args.dataset_name, seed_nb=args.seed_nb)
+		test(args.env_name, dataset_name=args.dataset_name, seed_nb=args.seed_nb, framework=args.framework)
 	elif (args.mode == "plot"):
-		plot(args.env_name, args.dataset_name, seed_nb=args.seed_nb)
+		plot(args.env_name, args.dataset_name, seed_nb=args.seed_nb, framework=args.framework)
 	elif (args.mode == "testplot"):
-		test(args.env_name, dataset_name=args.dataset_name)
-		plot(args.env_name, args.dataset_name, seed_nb=args.seed_nb)
+		test(args.env_name, dataset_name=args.dataset_name, framework=args.framework)
+		plot(args.env_name, args.dataset_name, seed_nb=args.seed_nb, framework=args.framework)
 	elif (args.mode == "full"):
-		train(dataset_name=args.dataset_name, env_name=args.env_name, seed_min=args.seed_min, seed_nb=args.seed_nb)
-		test(args.env_name, dataset_name=args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb)
-		plot(args.env_name, args.dataset_name,seed_nb=args.seed_nb)
+		train(dataset_name=args.dataset_name, env_name=args.env_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework)
+		test(args.env_name, dataset_name=args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework)
+		plot(args.env_name, args.dataset_name,seed_nb=args.seed_nb, framework=args.framework)
