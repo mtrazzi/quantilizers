@@ -25,6 +25,7 @@ from sklearn.neural_network import MLPClassifier
 from joblib import dump, load
 from datetime import datetime
 import random
+from keras.utils import to_categorical
 
 def traj_segment_generator(pi, env, horizon, play=True):
 
@@ -85,7 +86,7 @@ def mlp_classification(input_dim, output_size, hidden_size=20, reg=1e-4):
 	return model
 
 class ClassificationModel(object):
-	def __init__(self, number_classifiers, input_dim, output_size, dataset_name,
+	def __init__(self, number_classifiers, input_dim, dataset_name,
 				env_name, q, framework='sklearn', reg=1e-4, hidden_size=20, aggregate_method='continuous', seed=0):
 		self.framework = framework
 		self.dataset_name = dataset_name
@@ -94,7 +95,7 @@ class ClassificationModel(object):
 		self.reg = reg
 		self.nb_model = number_classifiers
 		self.input_dim = input_dim
-		self.output_size = output_size
+		self.output_size = 3 if env_name == 'Hopper-v2' else 2
 		self.hidden_size = hidden_size
 		self.seed = seed
 		self.model_list = self.init_models()
@@ -113,7 +114,7 @@ class ClassificationModel(object):
 	def fit(self, x_train, y_train):
 		for index, model in enumerate(self.model_list):
 			if self.framework == 'keras':
-				model.fit(x_train, y_train[:,index])
+				model.fit(x_train, to_categorical(y_train[:,index], num_classes=3))
 			elif self.framework == 'sklearn':
 				model.fit(x_train, y_train[:, index])
 				train_score = model.score(x_train, y_train[:, index])
@@ -186,15 +187,13 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 			dataset = Dataset(filename, quantile=q)
 
 			# compile keras models
-			model = ClassificationModel(number_classifiers, 
-										dataset.obs.shape[-1],
-										dataset.acs.shape[-1], 
-										dataset_name, 
-										env_name,
-										q=q, 
-										framework=framework, 
+			model = ClassificationModel(number_classifiers=number_classifiers,
+										input_dim=dataset.obs.shape[-1],
+										dataset_name=dataset_name,
+										env_name=env_name,
+										q=q,
+										framework=framework,
 										seed=seed)
-
 
 			# train
 			model.fit(dataset.obs, dataset.acs)
@@ -244,17 +243,16 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 
 		print("\n\n########## TESTING FOR SEED #{} ##########".format(seed))
 		
-		# loading models
-		obs_dim, acs_dim = (2, 1) if env_name == 'MountainCar-v0' else (11, 27)
-		models_list = [ClassificationModel(number_classifiers, obs_dim, acs_dim, dataset_name, env_name,q=q, framework=framework, aggregate_method='continuous') for q in quantiles]
-		for model in models_list:
-			model.load_weights()
-
 		# setup
 		env = RobustRewardEnv(env_name)
 		proxy_rews, true_rews = [], []
 		if not horizon:
 			horizon = env.max_episode_steps
+
+		# loading trained models
+		models_list = [ClassificationModel(number_classifiers, env.observation_space.shape[0], dataset_name, env_name,q=q, framework=framework, aggregate_method='continuous') for q in quantiles]
+		for model in models_list:
+			model.load_weights()
 	
 		# for all quantiles, collect trajectories
 		for model_nb, model in enumerate(models_list):
