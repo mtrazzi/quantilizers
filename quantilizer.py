@@ -10,22 +10,21 @@ import tempfile
 import argparse
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
-from helpers import graph_one, graph_two
+from helpers import graph_one
 import keras
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation
 from keras.optimizers import Adam
 from keras import regularizers
 from keras import callbacks
-from datetime import datetime
 import time
 from wrappers import RobustRewardEnv
 import os
 from sklearn.neural_network import MLPClassifier
 from joblib import dump, load
-from datetime import datetime
 import random
 from keras.utils import to_categorical
+from datetime import datetime
 
 def traj_segment_generator(pi, env, horizon, play=True):
 
@@ -80,22 +79,23 @@ def mlp_classification(input_dim, output_size, hidden_size=20, reg=1e-4):
 	model.add(Dense(hidden_size, activation='relu'))
 	model.add(Dense(output_size, kernel_regularizer=regularizers.l2(reg),
 	activation='softmax'))
-	model.compile(loss='categorical_crossentropy',
+	model.compile(loss='sparse_categorical_crossentropy',
 				optimizer='adam',
 				metrics=['accuracy'])
 	return model
 
 class ClassificationModel(object):
-	def __init__(self, number_classifiers, input_dim, dataset_name,
+	def __init__(self, nb_clf, input_dim, dataset_name,
 				env_name, q, framework='sklearn', reg=1e-4, hidden_size=20, aggregate_method='continuous', seed=0):
+		self.nb_clf = nb_clf
 		self.framework = framework
 		self.dataset_name = dataset_name
 		self.env_name = env_name
 		self.q = q
 		self.reg = reg
-		self.nb_model = number_classifiers
+		self.nb_model = nb_clf
 		self.input_dim = input_dim
-		self.output_size = 3 if env_name == 'Hopper-v2' else 2
+		self.classes = self.compute_classes()
 		self.hidden_size = hidden_size
 		self.seed = seed
 		self.model_list = self.init_models()
@@ -104,27 +104,37 @@ class ClassificationModel(object):
 			os.makedirs('log/models')
 	def init_models(self):
 		if self.framework == 'keras':
-			return [mlp_classification(self.input_dim, self.output_size, reg=self.reg) for _ in range(self.nb_model)]
+			# fix seeds to get reproducible results
+			np.random.seed(self.seed)
+			tf.set_random_seed(self.seed)
+			return [mlp_classification(self.input_dim, self.classes[i].shape[-1], reg=self.reg) for i in range(self.nb_model)]
 		elif self.framework == 'sklearn':
 			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), alpha=self.reg, random_state=self.seed) for _ in range(self.nb_model)]
 
+	def compute_classes(self):
+		"""gives the array of classes to predict for the quantile q dataset"""
+
+		filename = 'log/{}/{}.npz'.format(self.env_name, self.dataset_name)
+		dataset = Dataset(filename, quantile=self.q)
+		return [np.unique(dataset.acs[:,i]) for i in range(self.nb_clf)]
+	
 	def filename(self, index):
 		return 'log/models/{}_{}_{}_{}_{}_{}.h5'.format(self.dataset_name, self.env_name, self.q, index, self.framework, self.seed)
 
 	def fit(self, x_train, y_train):
 		for index, model in enumerate(self.model_list):
 			if self.framework == 'keras':
-				model.fit(x_train, to_categorical(y_train[:,index] - y_train[:,index].min(), num_classes=3))
+				#model.fit(x_train, to_categorical(y_train[:,index] - y_train[:,index].min(), num_classes=self.classes[index].shape[-1]))
+				model.fit(x_train, y_train[:,index]-y_train[:,index].min())
 			elif self.framework == 'sklearn':
 				model.fit(x_train, y_train[:, index])
 				train_score = model.score(x_train, y_train[:, index])
 				print("train score q={}: {}".format(self.q, train_score))
 
 	def predict(self, x):
-		classes = np.array([-1,0,1]) if self.env_name == 'Hopper-v2' else 0 #TODO: fix this for MountainCar-v0 or make this more modular using keras
 		if self.framework == 'keras':
 				if self.aggregate_method == 'continuous':
-					return [(classes * clf.predict(x.reshape(1, -1)).ravel()).sum() for clf in self.model_list]
+					return [(self.classes[index] * clf.predict(x.reshape(1, -1)).ravel()).sum() for (index,clf) in enumerate(self.model_list)]
 		elif self.framework == 'sklearn':
 			if self.aggregate_method == 'continuous':
 				return [(clf.classes_ * clf.predict_proba(x.reshape(1, -1)).ravel()).sum() for clf in self.model_list]
@@ -158,17 +168,7 @@ class ClassificationModel(object):
 				test_score = model.score(x_test, y_test[:, index])
 				print("test score q={}: {}".format(self.q, test_score))
 
-def encode_labels(labels):
-	"""transforms label array to one hot"""
-
-	labels = labels.astype(int)
-	labels = labels - labels.min()
-	def encoding(array):
-		return array[0] + 3  * array[1] + (3 ** 2) * array[2]
-	encoded_labels = np.array([encoding(label) for label in labels])
-	return np.eye(27)[encoded_labels]
-
-def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125], number_classifiers=3, framework='sklearn', seed_min=0, seed_nb=1):
+def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125], nb_clf=3, framework='sklearn', seed_min=0, seed_nb=1):
 	"""
 	returns a trained model on the dataset of human demonstrations 
 	for each quantile
@@ -179,6 +179,8 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 
 	trained_models = []
 
+	start = time.time()
+
 	for seed in range(seed_min, seed_min + seed_nb):
 
 		print("\n\n########## TRAINING FOR SEED #{} ##########".format(seed))
@@ -188,7 +190,7 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 			dataset = Dataset(filename, quantile=q)
 
 			# compile keras models
-			model = ClassificationModel(number_classifiers=number_classifiers,
+			model = ClassificationModel(nb_clf=nb_clf,
 										input_dim=dataset.obs.shape[-1],
 										dataset_name=dataset_name,
 										env_name=env_name,
@@ -204,6 +206,9 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 			trained_models.append(model)
 
 			del dataset
+	
+	with open("log/training_time.txt", "a+") as f:
+		f.write("\ntraining time on {} dataset using {} on {} was in total {}s and on average {}s per seed, so fast!".format(dataset_name, framework, datetime.now().strftime("%m%d-%H%M%S"), time.time() - start, (time.time()-start)/seed_nb))
 
 def load_models(weights_files_list, env_name):
 	obs_dim, acs_dim = (2, 1) if env_name == 'MountainCar-v0' else (11, 27)
@@ -215,26 +220,7 @@ def load_models(weights_files_list, env_name):
 		models_list.append(model)
 	return models_list
 
-def decode_one_hot(action):
-	"""
-	transforms one_hot into elementary (human) action
-	"""
-
-	encoding = np.argmax(action) # encoding of action in 0..26
-	ax1 = encoding % 3
-	ax2 = ((encoding - ax1) // 3) % 3
-	ax3 = (encoding - ax1 - 3 * ax2) // 9
-	return np.array([ax1, ax2, ax3]) - 1
-
-def pi_cheat_aux(ob, model):
-	"""outputs the continuous action based on the observation"""
-	cont_encoded_action = model.predict(ob.reshape(1,-1))[0]
-	one_hot_size = len(cont_encoded_action)
-	return np.sum([cont_encoded_action[i] *
-				 decode_one_hot(np.eye(one_hot_size)[i]) 
-				 for i in range(one_hot_size)])
-
-def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125], number_classifiers=3, framework='sklearn', seed_min=0, seed_nb=1):
+def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125], nb_clf=3, framework='sklearn', seed_min=0, seed_nb=1):
 		
 
 	for seed in range(seed_min, seed_min + seed_nb):
@@ -246,9 +232,9 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 		proxy_rews, true_rews = [], []
 		if not horizon:
 			horizon = env.max_episode_steps
-
+		
 		# loading trained models
-		models_list = [ClassificationModel(number_classifiers, env.observation_space.shape[0], dataset_name, env_name,q=q, framework=framework, aggregate_method='continuous') for q in quantiles]
+		models_list = [ClassificationModel(nb_clf, env.observation_space.shape[0], dataset_name, env_name, q=q, framework=framework, aggregate_method='continuous') for q in quantiles]
 		for model in models_list:
 			model.load_weights()
 	
@@ -256,7 +242,7 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 		for model_nb, model in enumerate(models_list):
 			start = time.time()
 			pi = lambda ob: model.predict(ob)
-			n_trajectories = 240 
+			n_trajectories = 240
 			_, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=True)
 
 			proxy_rews.append(proxy_rew_list)
@@ -279,7 +265,7 @@ def plot(env_name, dataset_name, seed_min=0, seed_nb=1, framework='sklearn'):
 		opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
 		true_rewards = [np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]]
 		proxy_rewards = [np.mean([sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [opt_val[1]]
-		graph_one(true_rewards, proxy_rewards, qs, env_name, dataset_name)
+		graph_one(true_rewards, proxy_rewards, qs, env_name, dataset_name, framework, seed)
 
 if __name__=="__main__":
 	parser = argparse.ArgumentParser()

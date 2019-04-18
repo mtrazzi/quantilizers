@@ -55,7 +55,7 @@ class RunningMean:
     __call__ = new
 
 
-def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, width=.35):
+def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, framework='keras', seed='0', width=.35):
     plt.figure(figsize=(4.3, 3.2))
 
     # True reward
@@ -77,30 +77,10 @@ def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, width=.
     labels = [l.get_label() for l in lines]
     ax1.yaxis.set_major_locator(m(nbins=3))
     ax2.yaxis.set_major_locator(m(nbins=3))
-    filename = 'log/fig/{}_{}_{}'.format(dataset_name, env_name,datetime.now().strftime("%m%d-%H%M%S"))
+    filename = 'log/fig/{}_{}_{}_{}_{}'.format(dataset_name, env_name, framework, seed, datetime.now().strftime("%m%d-%H%M%S"))
     print("saving results in {}.png".format(filename))
     if not os.path.exists('log/fig'):
         os.makedirs('log/fig')
     plt.savefig(filename)
     # plt.show()
-    plt.close()
-	
-def graph_two(x, y1, y2, xticks, m=MaxNLocator, title="MountainCar"):
-    #plt.figure(figsize=(6, 5));
-    plt.figure(figsize=(4.3, 3.2));
-    width = .35
-    ax1 = plt.subplot(111)
-    bar1 = ax1.bar(x, y1, width, label="Implicit loss", color='maroon');
-    ax1.set_ylabel("Implicit loss")
-    ax2 = ax1.twinx()
-    ax2.set_ylabel("Explicit reward")
-    bar2 = ax2.bar(x + width, y2, width, label="Explicit reward", color='goldenrod');
-    plt.title(title)
-    plt.xticks(x+width/2, xticks)
-    plt.xlabel("q values")
-    lines = (bar1, bar2)
-    labels = [l.get_label() for l in lines]
-    ax1.yaxis.set_major_locator(m(nbins=3))
-    ax2.yaxis.set_major_locator(m(nbins=3))
-    #plt.legend(lines,labels)
-    plt.savefig("fig/quant-vidpin.png")
+    plt.close()	
