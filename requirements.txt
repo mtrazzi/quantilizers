@@ -9,3 +9,4 @@ scikit_learn==0.20.3
 joblib
 opencv-python
 keras
+seaborn

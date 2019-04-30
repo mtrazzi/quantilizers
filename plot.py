@@ -9,6 +9,9 @@ from dataset import Dataset
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
 import itertools
+from sklearn.decomposition import PCA
+import seaborn as sn
+import pandas as pd
 
 def load_ep_rets(filename, debug=False):
     data = np.load(filename)['ep_rets']
@@ -90,10 +93,10 @@ def transform_labels(labels):
     result = np.zeros(labels.shape[0])
     for index, prediction in enumerate(labels):
         pos_pred = prediction + 1
-        result[index] = pos_pred[0] + pos_pred[1] * 3 + pos_pred[2] * (3 ** 2)
+        result[index] = pos_pred[0] * (3 ** 2) + pos_pred[1] * 3 + pos_pred[2]
     return result
 
-def print_confusion_matrix(aggregate_method='argmax', nb_clf=3, dataset_name='michael', env_name='Hopper-v2', framework='sklearn', seed=0, q=1.0, test_fraction = 0.2):
+def print_confusion_matrix(aggregate_method='argmax', nb_clf=3, dataset_name='ryan', env_name='Hopper-v2', framework='sklearn', seed=0, q=1.0, test_fraction = 0.01):
 
     # load the dataset
     filename = 'log/{}/{}.npz'.format(env_name, dataset_name)
@@ -118,11 +121,23 @@ def print_confusion_matrix(aggregate_method='argmax', nb_clf=3, dataset_name='mi
 
     # print the confusion matrix after transforming labels to integers
     proc_true, proc_pred = transform_labels(y_true), transform_labels(y_pred)
-    mat = confusion_matrix(proc_true, proc_pred)
+    mat = confusion_matrix(proc_true, proc_pred, labels=range(27))
     
+    index_list = [[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]]
+    labels = ["[{}, {}, {}]".format(i, j, k) for (i, j, k) in itertools.product(*index_list)]
+
+    # delete the correct labels
+    for i in range(len(mat)):
+        mat[i][i] = 0
+    
+    mat = mat / mat.sum()
+
+    df_cm = pd.DataFrame(mat, index = labels, columns = labels)
+
     print("confusion matrix is: \n", mat)
-    
-    import ipdb; ipdb.set_trace()
+    plt.figure()
+    sn.heatmap(df_cm, annot=True, annot_kws={"size": 5})
+    plt.show()
 
 def main():
     parser = argparse.ArgumentParser()

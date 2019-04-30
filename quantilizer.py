@@ -25,6 +25,7 @@ from joblib import dump, load
 import random
 from keras.utils import to_categorical
 from datetime import datetime
+from sklearn.decomposition import PCA
 
 def traj_segment_generator(pi, env, horizon, play=True):
 
