@@ -3,6 +3,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import argparse 
 from scipy import stats
+from quantilizer import ClassificationModel
+from wrappers import RobustRewardEnv
+from dataset import Dataset
+from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import train_test_split
+import itertools
 
 def load_ep_rets(filename, debug=False):
     data = np.load(filename)['ep_rets']
@@ -80,6 +86,43 @@ def average_performance_quantile(dataset_name_list, label_list,
             average_proxy = np.mean([sum(traj) for traj in pr_iq])
             print("for q={} dataset={} true rewards mean={} and proxy reward mean = {}".format(q, label_list[index], average_true, average_proxy))
 
+def transform_labels(labels):
+    result = np.zeros(labels.shape[0])
+    for index, prediction in enumerate(labels):
+        pos_pred = prediction + 1
+        result[index] = pos_pred[0] + pos_pred[1] * 3 + pos_pred[2] * (3 ** 2)
+    return result
+
+def print_confusion_matrix(aggregate_method='argmax', nb_clf=3, dataset_name='michael', env_name='Hopper-v2', framework='sklearn', seed=0, q=1.0, test_fraction = 0.2):
+
+    # load the dataset
+    filename = 'log/{}/{}.npz'.format(env_name, dataset_name)
+    print("confusion matrix for data: [{}]".format(filename))
+    dataset = Dataset(filename, quantile=q)
+
+    # load the model
+    model = ClassificationModel(nb_clf=nb_clf,
+                                input_dim=dataset.obs.shape[-1],
+                                dataset_name=dataset_name,
+                                env_name=env_name,
+                                q=q,
+                                framework=framework,
+                                aggregate_method=aggregate_method,
+                                seed=seed)
+    model.load_weights()
+
+    # compute the necessary vectors
+    _, x_test, _, y_test = train_test_split(dataset.obs, dataset.acs, test_size=test_fraction)
+    y_pred = np.array([model.predict(ob) for ob in x_test]).astype(int)
+    y_true = y_test.astype(int)
+
+    # print the confusion matrix after transforming labels to integers
+    proc_true, proc_pred = transform_labels(y_true), transform_labels(y_pred)
+    mat = confusion_matrix(proc_true, proc_pred)
+    
+    print("confusion matrix is: \n", mat)
+    
+    import ipdb; ipdb.set_trace()
 
 def main():
     parser = argparse.ArgumentParser()
@@ -98,6 +141,8 @@ def main():
         average_performance(args.path_list, args.label_list)
     elif (args.mode == 'quantiles'):
         average_performance_quantile(args.dataset_list, args.label_list)
+    elif (args.mode == 'confusion_matrix'):
+        print_confusion_matrix()
 
 if __name__ == '__main__':
     main()
