@@ -135,11 +135,14 @@ class ClassificationModel(object):
 		if self.framework == 'keras':
 				if self.aggregate_method == 'continuous':
 					return [(self.classes[index] * clf.predict(x.reshape(1, -1)).ravel()).sum() for (index,clf) in enumerate(self.model_list)]
+				else: 
+					raise NotImplementedError('only continuous aggregate_method is implemented')
 		elif self.framework == 'sklearn':
 			if self.aggregate_method == 'continuous':
 				return [(clf.classes_ * clf.predict_proba(x.reshape(1, -1)).ravel()).sum() for clf in self.model_list]
 			elif self.aggregate_method == 'argmax':
-				return [(clf.classes_ * clf.predict(x.reshape(1, -1)).ravel()).sum() for clf in self.model_list]
+				return [clf.classes_[np.argmax(clf.predict_proba(x.reshape(1,-1)
+				))] for clf in self.model_list]
 			elif self.aggregate_method == 'sample':
 				return [(clf.classes_ * (clf.predict_proba(x.reshape(1, -1)) < [np.random.random() for _ in range(len(clf.classes_))]).ravel()).sum() for clf in self.model_list]
 
@@ -220,7 +223,7 @@ def load_models(weights_files_list, env_name):
 		models_list.append(model)
 	return models_list
 
-def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125], nb_clf=3, framework='sklearn', seed_min=0, seed_nb=1):
+def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125], nb_clf=3, framework='sklearn', seed_min=0, seed_nb=1, aggregate_method='continuous'):
 		
 
 	for seed in range(seed_min, seed_min + seed_nb):
@@ -234,7 +237,7 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 			horizon = env.max_episode_steps
 		
 		# loading trained models
-		models_list = [ClassificationModel(nb_clf, env.observation_space.shape[0], dataset_name, env_name, q=q, framework=framework, aggregate_method='continuous') for q in quantiles]
+		models_list = [ClassificationModel(nb_clf, env.observation_space.shape[0], dataset_name, env_name, q=q, framework=framework, aggregate_method=aggregate_method) for q in quantiles]
 		for model in models_list:
 			model.load_weights()
 	
@@ -277,17 +280,18 @@ if __name__=="__main__":
 	parser.add_argument("--seed_min", action="store", default=0, type=int)
 	parser.add_argument("--seed_nb", action="store", default=1, type=int)
 	parser.add_argument("--framework", action="store", default="keras", type=str)
+	parser.add_argument("--aggregate_method", action="store", default="continuous", type=str)
 	args = parser.parse_args()
 	if (args.mode == "train"):
 		train(dataset_name=args.dataset_name, env_name=args.env_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework)
 	elif (args.mode == "test"):
-		test(args.env_name, dataset_name=args.dataset_name, seed_nb=args.seed_nb, framework=args.framework)
+		test(args.env_name, dataset_name=args.dataset_name, seed_nb=args.seed_nb, framework=args.framework, aggregate_method=args.aggregate_method)
 	elif (args.mode == "plot"):
 		plot(args.env_name, args.dataset_name, seed_nb=args.seed_nb, framework=args.framework)
 	elif (args.mode == "testplot"):
-		test(args.env_name, dataset_name=args.dataset_name, framework=args.framework)
+		test(args.env_name, dataset_name=args.dataset_name,  framework=args.framework, aggregate_method=args.aggregate_method)
 		plot(args.env_name, args.dataset_name, seed_nb=args.seed_nb, framework=args.framework)
 	elif (args.mode == "full"):
 		train(dataset_name=args.dataset_name, env_name=args.env_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework)
-		test(args.env_name, dataset_name=args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework)
+		test(args.env_name, dataset_name=args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, aggregate_method=args.aggregate_method)
 		plot(args.env_name, args.dataset_name,seed_nb=args.seed_nb, framework=args.framework)
