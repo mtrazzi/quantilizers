@@ -224,9 +224,9 @@ def load_models(weights_files_list, env_name):
 		models_list.append(model)
 	return models_list
 
-def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125], nb_clf=3, framework='sklearn', seed_min=0, seed_nb=1, aggregate_method='continuous'):
-		
+def test(env_name='Hopper-v2', dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125], nb_clf=3, framework='sklearn', seed_min=0, seed_nb=1, aggregate_method='continuous', n_trajectories=10):
 
+	result_list = []
 	for seed in range(seed_min, seed_min + seed_nb):
 
 		print("\n\n########## TESTING FOR SEED #{} ##########".format(seed))
@@ -246,8 +246,7 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 		for model_nb, model in enumerate(models_list):
 			start = time.time()
 			pi = lambda ob: model.predict(ob)
-			n_trajectories = 240
-			_, _, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=True)
+			ob_list, ac_list, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=False)
 
 			proxy_rews.append(proxy_rew_list)
 			true_rews.append(true_rew_list)
@@ -260,6 +259,10 @@ def test(env_name, dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .
 		np.save('log/rewards/{}_{}_{}_{}_true'.format(dataset_name, env_name, framework, seed), true_rews)
 		np.save('log/rewards/{}_{}_{}_{}_proxy'.format(dataset_name, env_name, framework, seed), 
 		proxy_rews)
+		
+		result_list.append([ob_list, ac_list])
+	
+	return result_list
 
 def plot(env_name, dataset_name, seed_min=0, seed_nb=1, framework='sklearn'):
 	for seed in range(seed_min, seed_min + seed_nb):
