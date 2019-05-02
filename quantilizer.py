@@ -111,6 +111,9 @@ class ClassificationModel(object):
 			return [mlp_classification(self.input_dim, self.classes[i].shape[-1], reg=self.reg) for i in range(self.nb_model)]
 		elif self.framework == 'sklearn':
 			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), alpha=self.reg, random_state=self.seed) for _ in range(self.nb_model)]
+		elif self.framework in ['random', 'status_quo']:
+			np.random.seed(self.seed)
+			return []
 
 	def compute_classes(self):
 		"""gives the array of classes to predict for the quantile q dataset"""
@@ -134,10 +137,10 @@ class ClassificationModel(object):
 
 	def predict(self, x):
 		if self.framework == 'keras':
-				if self.aggregate_method == 'continuous':
-					return [(self.classes[index] * clf.predict(x.reshape(1, -1)).ravel()).sum() for (index,clf) in enumerate(self.model_list)]
-				else: 
-					raise NotImplementedError('only continuous aggregate_method is implemented')
+			if self.aggregate_method == 'continuous':
+				return [(self.classes[index] * clf.predict(x.reshape(1, -1)).ravel()).sum() for (index,clf) in enumerate(self.model_list)]
+			else: 
+				raise NotImplementedError('only continuous aggregate_method is implemented')
 		elif self.framework == 'sklearn':
 			if self.aggregate_method == 'continuous':
 				return [(clf.classes_ * clf.predict_proba(x.reshape(1, -1)).ravel()).sum() for clf in self.model_list]
@@ -146,6 +149,13 @@ class ClassificationModel(object):
 				))] for clf in self.model_list]
 			elif self.aggregate_method == 'sample':
 				return [(clf.classes_ * (clf.predict_proba(x.reshape(1, -1)) < [np.random.random() for _ in range(len(clf.classes_))]).ravel()).sum() for clf in self.model_list]
+		elif self.framework == 'random':
+			if self.aggregate_method == 'continuous':
+				return [(np.array([-1, 0, 1]) * np.random.random(3)).sum() for _ in range(3)]
+			elif self.aggregate_method == 'argmax':
+				return np.array([-1, 0, 1])[np.random.randint(0,3)]
+		elif self.framework == 'status_quo':
+			return [0] * 3
 
 	def save_weights(self):
 		for index, model in enumerate(self.model_list):
@@ -225,7 +235,7 @@ def load_models(weights_files_list, env_name):
 		models_list.append(model)
 	return models_list
 
-def test(env_name='Hopper-v2', dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125], nb_clf=3, framework='sklearn', seed_min=0, seed_nb=1, aggregate_method='continuous', n_trajectories=10):
+def test(env_name='Hopper-v2', dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125], nb_clf=3, framework='sklearn', seed_min=0, seed_nb=1, aggregate_method='continuous', n_trajectories=10, render=False):
 
 	result_list = []
 	for seed in range(seed_min, seed_min + seed_nb):
@@ -240,7 +250,7 @@ def test(env_name='Hopper-v2', dataset_name='ryan', horizon=None, quantiles=[1.0
 		
 		# loading trained models
 		print("aggregate method here is [{}]".format(aggregate_method))
-		models_list = [ClassificationModel(nb_clf, env.observation_space.shape[0], dataset_name, env_name, q=q, framework=framework, aggregate_method=aggregate_method) for q in quantiles]
+		models_list = [ClassificationModel(nb_clf, env.observation_space.shape[0], dataset_name, env_name, q=q, framework=framework, aggregate_method=aggregate_method, seed=seed) for q in quantiles]
 		for model in models_list:
 			model.load_weights()
 	
@@ -248,7 +258,7 @@ def test(env_name='Hopper-v2', dataset_name='ryan', horizon=None, quantiles=[1.0
 		for model_nb, model in enumerate(models_list):
 			start = time.time()
 			pi = lambda ob: model.predict(ob)
-			ob_list, ac_list, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=True)
+			ob_list, ac_list, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=render)
 
 			proxy_rews.append(proxy_rew_list)
 			true_rews.append(true_rew_list)
@@ -258,23 +268,31 @@ def test(env_name='Hopper-v2', dataset_name='ryan', horizon=None, quantiles=[1.0
 
 		if not os.path.exists('log/rewards'):
 			os.makedirs('log/rewards')	
-		np.save('log/rewards/{}_{}_{}_{}_true'.format(dataset_name, env_name, framework, seed), true_rews)
-		np.save('log/rewards/{}_{}_{}_{}_proxy'.format(dataset_name, env_name, framework, seed), 
+		np.save('log/rewards/{}_{}_{}_{}_{}_true'.format(dataset_name, env_name, framework, aggregate_method, seed), true_rews)
+		np.save('log/rewards/{}_{}_{}_{}_{}_proxy'.format(dataset_name, env_name, framework, aggregate_method, seed), 
 		proxy_rews)
 		
 		result_list.append([ob_list, ac_list])
 	
 	return result_list
 
-def plot(env_name, dataset_name, seed_min=0, seed_nb=1, framework='sklearn'):
+def plot(env_name, dataset_name, seed_min=0, seed_nb=1, framework='sklearn', quantiles=[1.0, .5, .25, .125], barplot=False, aggregate_method='continuous'):
 	for seed in range(seed_min, seed_min + seed_nb):
-		proxy_rews_list = np.load('log/rewards/{}_{}_{}_{}_proxy.npy'.format(dataset_name, env_name, framework, seed))
-		true_rews_list = np.load('log/rewards/{}_{}_{}_{}_true.npy'.format(dataset_name, env_name, framework, seed))
-		qs = [1.0, .5, .25, .125]
-		opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
-		true_rewards = [np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]]
-		proxy_rewards = [np.mean([sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [opt_val[1]]
-		graph_one(true_rewards, proxy_rewards, qs, env_name, dataset_name, framework, seed)
+		proxy_filename = 'log/rewards/{}_{}_{}_{}_{}_proxy.npy'.format(dataset_name, env_name, framework, aggregate_method, seed)
+		true_filename = 'log/rewards/{}_{}_{}_{}_{}_true.npy'.format(dataset_name, env_name, framework, aggregate_method, seed)
+		#print("for plots: loading from [{}] and [{}]".format(proxy_filename, true_filename))
+		proxy_rews_list, true_rews_list = np.load(proxy_filename), np.load(true_filename)
+
+		# printing specific stats
+		tr_imit = [sum(traj) for traj in true_rews_list[0]]
+		pr_imit = [sum(traj) for traj in proxy_rews_list[0]]
+		print('[{} {} {} traj seed {}]: tr={}+/-{} (med={}) and pr={}+/-{} (med={})'.format(aggregate_method, framework, len(tr_imit), seed, int(np.mean(tr_imit)), int(np.std(tr_imit)), int(np.median(tr_imit)), int(100 * np.mean(pr_imit)), int(100 * np.std(pr_imit)), int(100 * np.median(pr_imit))))
+		
+		if barplot:
+			opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
+			true_rewards = [np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]]
+			proxy_rewards = [np.mean([sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [opt_val[1]]
+			graph_one(true_rewards, proxy_rewards, quantiles, env_name, dataset_name, framework=framework, seed=seed)
 
 if __name__=="__main__":
 	parser = argparse.ArgumentParser()
@@ -282,22 +300,20 @@ if __name__=="__main__":
 	parser.add_argument("--hidden_size", action="store", default=20, type=int)
 	parser.add_argument("--dataset_name", action="store", default='ryan', type=str)
 	parser.add_argument("--env_name", action="store", default="Hopper-v2", type=str)
-	parser.add_argument("--mode", action="store", default="train", type=str)
+	parser.add_argument("--do",  nargs='+', default=None)
 	parser.add_argument("--seed_min", action="store", default=0, type=int)
 	parser.add_argument("--seed_nb", action="store", default=1, type=int)
 	parser.add_argument("--framework", action="store", default="keras", type=str)
 	parser.add_argument("--aggregate_method", action="store", default="continuous", type=str)
+	parser.add_argument("--number_trajectories", action="store", default=10, type=int)
+	parser.add_argument('--quantiles', nargs='+', default=None, type=float)
+	parser.add_argument('--render', default=False, type=bool)
+	parser.add_argument('--barplot', default=False, type=bool)
 	args = parser.parse_args()
-	if (args.mode == "train"):
-		train(dataset_name=args.dataset_name, env_name=args.env_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework)
-	elif (args.mode == "test"):
-		test(args.env_name, dataset_name=args.dataset_name, seed_nb=args.seed_nb, framework=args.framework, aggregate_method=args.aggregate_method)
-	elif (args.mode == "plot"):
-		plot(args.env_name, args.dataset_name, seed_nb=args.seed_nb, framework=args.framework)
-	elif (args.mode == "testplot"):
-		test(args.env_name, dataset_name=args.dataset_name,  framework=args.framework, aggregate_method=args.aggregate_method)
-		plot(args.env_name, args.dataset_name, seed_nb=args.seed_nb, framework=args.framework)
-	elif (args.mode == "full"):
-		train(dataset_name=args.dataset_name, env_name=args.env_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework)
-		test(args.env_name, dataset_name=args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, aggregate_method=args.aggregate_method)
-		plot(args.env_name, args.dataset_name,seed_nb=args.seed_nb, framework=args.framework)
+
+	if 'train' in args.do:
+		train(dataset_name=args.dataset_name, env_name=args.env_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, quantiles=args.quantiles)
+	if 'test' in args.do:
+		test(args.env_name, dataset_name=args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, aggregate_method=args.aggregate_method, n_trajectories=args.number_trajectories, quantiles=args.quantiles, render=args.render)
+	if 'plot' in args.do:
+		plot(args.env_name, args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, quantiles=args.quantiles, barplot=args.barplot, aggregate_method=args.aggregate_method)

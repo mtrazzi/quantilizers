@@ -55,7 +55,7 @@ class RunningMean:
     __call__ = new
 
 
-def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, framework='keras', seed='0', width=.35):
+def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, framework='keras', seed=0, width=.35):
     plt.figure(figsize=(4.3, 3.2))
 
     # True reward
@@ -83,4 +83,4 @@ def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, framewo
         os.makedirs('log/fig')
     plt.savefig(filename)
     # plt.show()
-    plt.close()	
+    plt.close()
