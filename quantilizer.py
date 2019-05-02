@@ -158,6 +158,7 @@ class ClassificationModel(object):
 	def load_weights(self):
 		for index, model in enumerate(self.model_list):
 			path = self.filename(index)
+			print("loading weights from the path [{}]".format(path))
 			if self.framework == 'keras':
 				model.load_weights(path)
 			elif self.framework == 'sklearn':
@@ -238,6 +239,7 @@ def test(env_name='Hopper-v2', dataset_name='ryan', horizon=None, quantiles=[1.0
 			horizon = env.max_episode_steps
 		
 		# loading trained models
+		print("aggregate method here is [{}]".format(aggregate_method))
 		models_list = [ClassificationModel(nb_clf, env.observation_space.shape[0], dataset_name, env_name, q=q, framework=framework, aggregate_method=aggregate_method) for q in quantiles]
 		for model in models_list:
 			model.load_weights()
@@ -246,7 +248,7 @@ def test(env_name='Hopper-v2', dataset_name='ryan', horizon=None, quantiles=[1.0
 		for model_nb, model in enumerate(models_list):
 			start = time.time()
 			pi = lambda ob: model.predict(ob)
-			ob_list, ac_list, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=False)
+			ob_list, ac_list, _, proxy_rew_list, true_rew_list = get_trajectories(pi, env, horizon, n_trajectories, play=True)
 
 			proxy_rews.append(proxy_rew_list)
 			true_rews.append(true_rew_list)

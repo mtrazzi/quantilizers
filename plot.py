@@ -167,7 +167,8 @@ def format_sequence_per_classifier(labels, axis=0):
     # color the most important actions accordingly
     d = {0:'r', 1:'k', 2:'b'}
     for index,value in enumerate(labels.astype(int)):
-        color_sequence[index] = d[value // (3 ** axis)% 3]
+        color_sequence[index] = d[(value // (3 ** axis)) % 3]
+    print("colors for axis={} is: {}".format(axis, Counter(color_sequence)))
     return color_sequence
 
 def pad_with_zeros(obs, acs):
@@ -187,12 +188,12 @@ def pad_with_zeros(obs, acs):
     padded_acs = pad3d(acs, (n_eps, ep_length, len(acs[0][0])))
     return padded_obs, padded_acs
 
-def plot_pca(dataset_name='ryan', env_name='Hopper-v2', quantile=0.125, n_components=2, rollouts=True):
+def plot_pca(dataset_name='michael', env_name='Hopper-v2', quantile=0.125, n_components=3, aggregate_method='argmax', framework='sklearn', nb_trajectories=0):
 
     pca = PCA(n_components=n_components)
 
-    if rollouts:
-        results_list = test(env_name=env_name, dataset_name=dataset_name, aggregate_method='argmax', n_trajectories=10, quantiles=[quantile])
+    if nb_trajectories > 0:
+        results_list = test(env_name=env_name, dataset_name=dataset_name, aggregate_method=aggregate_method, n_trajectories=nb_trajectories, quantiles=[quantile], framework=framework)
         obs, acs = pad_with_zeros(*results_list[0])
         obs = obs.reshape(-1, obs.shape[-1])
         acs = acs.reshape(-1, acs.shape[-1])
@@ -204,6 +205,8 @@ def plot_pca(dataset_name='ryan', env_name='Hopper-v2', quantile=0.125, n_compon
         obs, acs = dataset.obs, dataset.acs
 
     obs = pca.fit_transform(obs)
+
+    # print("original actions are: {}".format(Counter(transform_labels(acs))))
 
     # plot pca for each "classifier axis"
     for axis in range(3):
@@ -221,9 +224,12 @@ def plot_pca(dataset_name='ryan', env_name='Hopper-v2', quantile=0.125, n_compon
             for angle in range(0, 3):
                 ax.view_init(30, angle * 120)
                 plt.draw()
-                plt.pause(.0001)
+                plt.pause(0.01)
 
-        save_path = 'log/fig/{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, int(1000 * quantile), n_components, axis)
+        if nb_trajectories:
+            save_path = 'log/fig/{}_{}_{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, framework, aggregate_method, int(1000 * quantile), n_components, axis)
+        else:
+            save_path = 'log/fig/{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, int(1000 * quantile), n_components, axis)
         if not os.path.exists('log/fig'):
             os.makedirs('log/fig')
         plt.savefig(save_path)
@@ -242,6 +248,11 @@ def main():
     parser.add_argument('-d', '--debug', default=False)
     parser.add_argument('--discount', default=0.99)
     parser.add_argument('--mode', required=True)
+    parser.add_argument('--dataset_name', default='ryan')
+    parser.add_argument('--quantile', default=0.125, type=float)
+    parser.add_argument('--framework', default='sklearn', type=str)
+    parser.add_argument('--aggregate_method', default='argmax', type=str)
+    parser.add_argument('--nb_trajectories', default=0, type=int)
     args = parser.parse_args()
     if (args.mode == 'smooth'):
         plot_smoothed_rets(args.path_list, args.discount, args.label_list)
@@ -254,7 +265,7 @@ def main():
     elif (args.mode == 'confusion_matrix'):
         print_confusion_matrix()
     elif (args.mode == 'pca'):
-        plot_pca()
+        plot_pca(quantile=args.quantile, dataset_name=args.dataset_name, framework=args.framework, aggregate_method=args.aggregate_method, nb_trajectories=args.nb_trajectories)
 
 
 if __name__ == '__main__':
