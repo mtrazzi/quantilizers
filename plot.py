@@ -17,6 +17,8 @@ import os
 from mpl_toolkits.mplot3d import Axes3D
 from collections import Counter
 from quantilizer import test
+from joblib import dump, load
+import os.path
 
 def load_ep_rets(filename, debug=False):
     data = np.load(filename)['ep_rets']
@@ -188,57 +190,60 @@ def pad_with_zeros(obs, acs):
     padded_acs = pad3d(acs, (n_eps, ep_length, len(acs[0][0])))
     return padded_obs, padded_acs
 
-def plot_pca(dataset_name='michael', env_name='Hopper-v2', quantile=0.125, n_components=3, aggregate_method='argmax', framework='sklearn', nb_trajectories=0):
-
+def fit_pca(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_components=3):
+    filename = 'log/{}/{}.npz'.format(env_name, dataset_name)
+    print("fitting pca for data: [{}]".format(filename))
+    dataset = Dataset(filename, quantile=quantile)
     pca = PCA(n_components=n_components)
+    pca.fit(dataset.obs)
+    print("In original dataset, distribution over actions are: {}".format(Counter(transform_labels(dataset.acs))))
+    dump(pca, 'log/models/{}.pca'.format(dataset_name))
 
-    if nb_trajectories > 0:
-        results_list = test(env_name=env_name, dataset_name=dataset_name, aggregate_method=aggregate_method, n_trajectories=nb_trajectories, quantiles=[quantile], framework=framework)
-        obs, acs = pad_with_zeros(*results_list[0])
-        obs = obs.reshape(-1, obs.shape[-1])
-        acs = acs.reshape(-1, acs.shape[-1])
-    else:
-        filename = 'log/{}/{}.npz'.format(env_name, dataset_name)
-        
-        print("doing pca for data: [{}]".format(filename))
-        dataset = Dataset(filename, quantile=quantile)
-        obs, acs = dataset.obs, dataset.acs
 
-    obs = pca.fit_transform(obs)
+def plot_pca(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_components=3, aggregate_method='continuous', framework='sklearn', nb_trajectories=100, seed=3):
+    
+    # load pca components already fitted to dataset
+    pca = load('log/models/{}.pca'.format(dataset_name))
+    
+    # transform observations from rollouts according to fitted pca
+    results_list = test(env_name=env_name, dataset_name=dataset_name, aggregate_method=aggregate_method, n_trajectories=nb_trajectories, quantiles=[quantile], framework=framework, seed_min=seed)
+    obs, acs = pad_with_zeros(*results_list[0])
+    obs = obs.reshape(-1, obs.shape[-1])
+    acs = acs.reshape(-1, acs.shape[-1])
+    obs = pca.transform(obs)
 
-    # print("original actions are: {}".format(Counter(transform_labels(acs))))
-
+    # load dataset
+    filename = 'log/{}/{}.npz'.format(env_name, dataset_name)
+    print("loading dataset: [{}]".format(filename))
+    dataset = Dataset(filename, quantile=quantile)
+    
     # plot pca for each "classifier axis"
     for axis in range(3):
-        colors = format_sequence_per_classifier(transform_labels(acs), axis=axis)
+        colors_rollouts = format_sequence_per_classifier(transform_labels(acs), axis=axis)
+        colors_dataset = format_sequence_per_classifier(transform_labels(dataset.acs), axis=axis)
 
         if n_components == 2:
-            plt.scatter(obs[:, 0], obs[:, 1], c=colors, alpha=0.02)
+            plt.scatter(obs[:, 0], obs[:, 1], c=colors_rollouts, alpha=0.02)
         elif n_components == 3:
             fig = plt.figure(figsize=(100,100))
             plt.title("pca for top quantile q={} of {}'s dataset".format(quantile, dataset_name))
-            ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(obs[:, 0], obs[:, 1], obs[:, 2], c=colors, linewidth=0, alpha=0.02)
+            ax1 = fig.add_subplot(121, projection='3d')
+            ax1.scatter(obs[:, 0], obs[:, 1], obs[:, 2], c=colors_rollouts, linewidth=0, alpha=0.02)
+            
+            ax2 = fig.add_subplot(122, projection='3d')
+            ax2.scatter(dataset.obs[:, 0], dataset.obs[:, 1], dataset.obs[:, 2], c=colors_dataset, linewidth=0, alpha=0.02)
             
             # rotate the axes and update
             for angle in range(0, 3):
-                ax.view_init(30, angle * 120)
+                ax1.view_init(30, angle * 120)
                 plt.draw()
-                plt.pause(0.01)
+                plt.pause(0.1)
+                rollouts_save_path = 'log/fig/{}_{}_{}_{}_pca_{}_{}d_classif#{}_angle#{}'.format(env_name, dataset_name, framework, aggregate_method, int(1000 * quantile), n_components, axis, angle)
+                plt.savefig(rollouts_save_path)
 
-        if nb_trajectories:
-            save_path = 'log/fig/{}_{}_{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, framework, aggregate_method, int(1000 * quantile), n_components, axis)
-        else:
-            save_path = 'log/fig/{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, int(1000 * quantile), n_components, axis)
-        if not os.path.exists('log/fig'):
-            os.makedirs('log/fig')
-        plt.savefig(save_path)
-        counter = Counter(acs[:, axis])
-        print("Counter for axis={}: {}".format(axis,counter))
-
-        maj_class = counter[np.argmax(Counter)]
-        total = sum(counter[index] for index in range(len(counter)))
-        print("baseline from predicting majority class: {}%".format(100 * (maj_class / total)))
+            plt.plot("")
+            dataset_save_path = 'log/fig/{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, int(1000 * quantile), n_components, axis)
+            plt.savefig(dataset_save_path)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -249,10 +254,11 @@ def main():
     parser.add_argument('--discount', default=0.99)
     parser.add_argument('--mode', required=True)
     parser.add_argument('--dataset_name', default='ryan')
-    parser.add_argument('--quantile', default=0.125, type=float)
+    parser.add_argument('--quantile', default=1.0, type=float)
     parser.add_argument('--framework', default='sklearn', type=str)
-    parser.add_argument('--aggregate_method', default='argmax', type=str)
-    parser.add_argument('--nb_trajectories', default=0, type=int)
+    parser.add_argument('--aggregate_method', default='continuous', type=str)
+    parser.add_argument('--nb_trajectories', default=100, type=int)
+    parser.add_argument('--seed', default=3, type=int)
     args = parser.parse_args()
     if (args.mode == 'smooth'):
         plot_smoothed_rets(args.path_list, args.discount, args.label_list)
@@ -265,7 +271,10 @@ def main():
     elif (args.mode == 'confusion_matrix'):
         print_confusion_matrix()
     elif (args.mode == 'pca'):
-        plot_pca(quantile=args.quantile, dataset_name=args.dataset_name, framework=args.framework, aggregate_method=args.aggregate_method, nb_trajectories=args.nb_trajectories)
+        file_path = 'log/models/{}.pca'.format(args.dataset_name)
+        if not os.path.exists(file_path):
+            fit_pca(args.dataset_name)
+        plot_pca(quantile=args.quantile, dataset_name=args.dataset_name, framework=args.framework, aggregate_method=args.aggregate_method, nb_trajectories=args.nb_trajectories, seed=args.seed)
 
 
 if __name__ == '__main__':
