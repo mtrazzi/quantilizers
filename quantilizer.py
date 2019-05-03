@@ -87,7 +87,7 @@ def mlp_classification(input_dim, output_size, hidden_size=20, reg=1e-4):
 
 class ClassificationModel(object):
 	def __init__(self, nb_clf, input_dim, dataset_name,
-				env_name, q, framework='sklearn', reg=1e-4, hidden_size=20, aggregate_method='continuous', seed=0):
+				env_name, q, framework='sklearn', reg=1e-4, hidden_size=20, aggregate_method='continuous', seed=0, path='', tol=1e-5):
 		self.nb_clf = nb_clf
 		self.framework = framework
 		self.dataset_name = dataset_name
@@ -99,10 +99,12 @@ class ClassificationModel(object):
 		self.classes = self.compute_classes()
 		self.hidden_size = hidden_size
 		self.seed = seed
+		self.tol = tol
 		self.model_list = self.init_models()
 		self.aggregate_method = aggregate_method
-		if not os.path.exists('log/models'):
-			os.makedirs('log/models')
+		self.model_path = 'log/models' + '/' + path
+		if not os.path.exists(self.model_path):
+			os.makedirs(self.model_path)
 
 	def init_models(self):
 		if self.framework == 'keras':
@@ -111,8 +113,8 @@ class ClassificationModel(object):
 			tf.set_random_seed(self.seed)
 			return [mlp_classification(self.input_dim, self.classes[i].shape[-1], reg=self.reg) for i in range(self.nb_model)]
 		elif self.framework == 'sklearn':
-			print("when initializing models, reg is indeed [{}]".format(self.reg))
-			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), alpha=self.reg, random_state=self.seed, verbose=True, tol=1e-3) for _ in range(self.nb_model)]
+			print("when initializing models, reg is [{}] and tol is [{}]".format(self.reg, self.tol))
+			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), alpha=self.reg, random_state=self.seed, verbose=True, tol=self.tol) for _ in range(self.nb_model)]
 		elif self.framework in ['random', 'status_quo']:
 			np.random.seed(self.seed)
 			return []
@@ -125,7 +127,7 @@ class ClassificationModel(object):
 		return [np.unique(dataset.acs[:,i]) for i in range(self.nb_clf)]
 	
 	def filename(self, index):
-		return 'log/models/{}_{}_{}_{}_{}_{}.h5'.format(self.dataset_name, self.env_name, self.q, index, self.framework, self.seed)
+		return '{}{}_{}_{}_{}_{}_{}.h5'.format(self.model_path, self.dataset_name, self.env_name, self.q, index, self.framework, self.seed)
 
 	def fit(self, x_train, y_train):
 		for index, model in enumerate(self.model_list):
@@ -189,7 +191,7 @@ class ClassificationModel(object):
 				test_score = model.score(x_test, y_test[:, index])
 				print("test score q={}: {}".format(self.q, test_score))
 
-def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125], nb_clf=3, framework='sklearn', seed_min=0, seed_nb=1, reg=1e-4):
+def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125], nb_clf=3, framework='sklearn', seed_min=0, seed_nb=1, reg=1e-4, path=''):
 	"""
 	returns a trained model on the dataset of human demonstrations 
 	for each quantile
@@ -218,7 +220,8 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 										q=q,
 										framework=framework,
 										seed=seed,
-										reg=reg)
+										reg=reg,
+										path=path)
 
 			# train
 			model.fit(dataset.obs, dataset.acs)
@@ -242,7 +245,7 @@ def load_models(weights_files_list, env_name):
 		models_list.append(model)
 	return models_list
 
-def test(env_name='Hopper-v2', dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125], nb_clf=3, framework='sklearn', seed_min=0, seed_nb=1, aggregate_method='continuous', n_trajectories=10, render=False):
+def test(env_name='Hopper-v2', dataset_name='ryan', horizon=None, quantiles=[1.0, .5, .25, .125], nb_clf=3, framework='sklearn', seed_min=0, seed_nb=1, aggregate_method='continuous', n_trajectories=10, render=False, path=''):
 
 	result_list = []
 	for seed in range(seed_min, seed_min + seed_nb):
@@ -257,7 +260,7 @@ def test(env_name='Hopper-v2', dataset_name='ryan', horizon=None, quantiles=[1.0
 		
 		# loading trained models
 		print("aggregate method here is [{}]".format(aggregate_method))
-		models_list = [ClassificationModel(nb_clf, env.observation_space.shape[0], dataset_name, env_name, q=q, framework=framework, aggregate_method=aggregate_method, seed=seed) for q in quantiles]
+		models_list = [ClassificationModel(nb_clf, env.observation_space.shape[0], dataset_name, env_name, q=q, framework=framework, aggregate_method=aggregate_method, seed=seed, path=path) for q in quantiles]
 		for model in models_list:
 			model.load_weights()
 	
@@ -316,11 +319,12 @@ if __name__=="__main__":
 	parser.add_argument('--quantiles', nargs='+', default=None, type=float)
 	parser.add_argument('--render', default=False, type=bool)
 	parser.add_argument('--barplot', default=False, type=bool)
+	parser.add_argument('--path', default='', type=str)
 	args = parser.parse_args()
 
 	if 'train' in args.do:
-		train(dataset_name=args.dataset_name, env_name=args.env_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, quantiles=args.quantiles, reg=args.reg)
+		train(dataset_name=args.dataset_name, env_name=args.env_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, quantiles=args.quantiles, reg=args.reg, path=args.path)
 	if 'test' in args.do:
-		test(args.env_name, dataset_name=args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, aggregate_method=args.aggregate_method, n_trajectories=args.number_trajectories, quantiles=args.quantiles, render=args.render)
+		test(args.env_name, dataset_name=args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, aggregate_method=args.aggregate_method, n_trajectories=args.number_trajectories, quantiles=args.quantiles, render=args.render, path=args.path)
 	if 'plot' in args.do:
 		plot(args.env_name, args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, quantiles=args.quantiles, barplot=args.barplot, aggregate_method=args.aggregate_method)

@@ -19,6 +19,7 @@ from collections import Counter
 from quantilizer import test
 from joblib import dump, load
 import os.path
+import time
 
 def load_ep_rets(filename, debug=False):
     data = np.load(filename)['ep_rets']
@@ -190,17 +191,38 @@ def pad_with_zeros(obs, acs):
     padded_acs = pad3d(acs, (n_eps, ep_length, len(acs[0][0])))
     return padded_obs, padded_acs
 
-def fit_pca(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_components=3):
+def plot_dataset(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_components=3, alpha=0.02):
+    
+    # load dataset
     filename = 'log/{}/{}.npz'.format(env_name, dataset_name)
-    print("fitting pca for data: [{}]".format(filename))
     dataset = Dataset(filename, quantile=quantile)
-    pca = PCA(n_components=n_components)
-    pca.fit(dataset.obs)
-    print("In original dataset, distribution over actions are: {}".format(Counter(transform_labels(dataset.acs))))
-    dump(pca, 'log/models/{}.pca'.format(dataset_name))
+    
+    # load / fit pca
+    path = 'log/models/{}.pca'.format(dataset_name)
+    if not os.path.exists(path):
+        pca = PCA(n_components=n_components)
+        start = time.time()
+        print("fitting pca for data: [{}]".format(filename))
+        pca.fit(dataset.obs)
+        print("fitting pca took {}s!".format(time.time()-start))
+        print("In original dataset, distribution over actions is: {}".format(Counter(transform_labels(dataset.acs))))
+        dump(pca, path)
+    else:
+        pca = load(path)
+        
+    # plot dataset
+    fig = plt.figure(figsize=(100,100))
+    for axis in range(3):
+        print("starting to plot axis={} of dataset with alpha={} at: [{}]".format(axis, alpha, time.ctime(time.time())))
+        start = time.time()
+        colors_dataset = format_sequence_per_classifier(transform_labels(dataset.acs), axis=axis)
+        ax2 = fig.add_subplot(111, projection='3d')
+        ax2.scatter(dataset.obs[:, 0], dataset.obs[:, 1], dataset.obs[:, 2], c=colors_dataset, linewidth=0, alpha=alpha)
+        dataset_save_path = 'log/fig/{}_{}_pca_{}_{}d_alpha{}_classif#{}'.format(env_name, dataset_name, int(1000 * quantile), n_components, str(alpha)[2:], axis)
+        plt.savefig(dataset_save_path)
+        print("plotting time was {}s".format(int(time.time() - start)))
 
-
-def plot_pca(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_components=3, aggregate_method='continuous', framework='sklearn', nb_trajectories=100, seed=3):
+def plot_rollouts(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_components=3, aggregate_method='continuous', framework='sklearn', nb_trajectories=100, seed=3, alpha=0.2):
     
     # load pca components already fitted to dataset
     pca = load('log/models/{}.pca'.format(dataset_name))
@@ -220,30 +242,23 @@ def plot_pca(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_componen
     # plot pca for each "classifier axis"
     for axis in range(3):
         colors_rollouts = format_sequence_per_classifier(transform_labels(acs), axis=axis)
-        colors_dataset = format_sequence_per_classifier(transform_labels(dataset.acs), axis=axis)
 
         if n_components == 2:
-            plt.scatter(obs[:, 0], obs[:, 1], c=colors_rollouts, alpha=0.02)
+            plt.scatter(obs[:, 0], obs[:, 1], c=colors_rollouts, alpha=alpha)
         elif n_components == 3:
             fig = plt.figure(figsize=(100,100))
             plt.title("pca for top quantile q={} of {}'s dataset".format(quantile, dataset_name))
-            ax1 = fig.add_subplot(121, projection='3d')
-            ax1.scatter(obs[:, 0], obs[:, 1], obs[:, 2], c=colors_rollouts, linewidth=0, alpha=0.02)
-            
-            ax2 = fig.add_subplot(122, projection='3d')
-            ax2.scatter(dataset.obs[:, 0], dataset.obs[:, 1], dataset.obs[:, 2], c=colors_dataset, linewidth=0, alpha=0.02)
-            
-            # rotate the axes and update
-            for angle in range(0, 3):
-                ax1.view_init(30, angle * 120)
-                plt.draw()
-                plt.pause(0.1)
-                rollouts_save_path = 'log/fig/{}_{}_{}_{}_pca_{}_{}d_classif#{}_angle#{}'.format(env_name, dataset_name, framework, aggregate_method, int(1000 * quantile), n_components, axis, angle)
-                plt.savefig(rollouts_save_path)
+            ax1 = fig.add_subplot(111, projection='3d')
+            ax1.scatter(obs[:, 0], obs[:, 1], obs[:, 2], c=colors_rollouts, linewidth=0, alpha=alpha)
 
-            plt.plot("")
-            dataset_save_path = 'log/fig/{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, int(1000 * quantile), n_components, axis)
-            plt.savefig(dataset_save_path)
+            # # rotate the axes and update
+            # for angle in range(0, 3):
+            #     ax1.view_init(30, angle * 120)
+            #     plt.draw()
+            #     plt.pause(0.1)
+            
+            rollouts_save_path = 'log/fig/{}_{}_{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, framework, aggregate_method, int(1000 * quantile), n_components, axis)
+            plt.savefig(rollouts_save_path)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -259,6 +274,7 @@ def main():
     parser.add_argument('--aggregate_method', default='continuous', type=str)
     parser.add_argument('--nb_trajectories', default=100, type=int)
     parser.add_argument('--seed', default=3, type=int)
+    parser.add_argument('--alpha', default=0.02, type=float)
     args = parser.parse_args()
     if (args.mode == 'smooth'):
         plot_smoothed_rets(args.path_list, args.discount, args.label_list)
@@ -270,11 +286,10 @@ def main():
         average_performance_quantile(args.dataset_list, args.label_list)
     elif (args.mode == 'confusion_matrix'):
         print_confusion_matrix()
-    elif (args.mode == 'pca'):
-        file_path = 'log/models/{}.pca'.format(args.dataset_name)
-        if not os.path.exists(file_path):
-            fit_pca(args.dataset_name)
-        plot_pca(quantile=args.quantile, dataset_name=args.dataset_name, framework=args.framework, aggregate_method=args.aggregate_method, nb_trajectories=args.nb_trajectories, seed=args.seed)
+    elif (args.mode == 'pca_dataset'):
+        plot_dataset(dataset_name=args.dataset_name, alpha=args.alpha)
+    elif (args.mode == 'pca_rollouts'):
+        plot_rollouts(quantile=args.quantile, dataset_name=args.dataset_name, framework=args.framework, aggregate_method=args.aggregate_method, nb_trajectories=args.nb_trajectories, seed=args.seed)
 
 
 if __name__ == '__main__':
