@@ -103,6 +103,7 @@ class ClassificationModel(object):
 		self.aggregate_method = aggregate_method
 		if not os.path.exists('log/models'):
 			os.makedirs('log/models')
+
 	def init_models(self):
 		if self.framework == 'keras':
 			# fix seeds to get reproducible results
@@ -110,7 +111,8 @@ class ClassificationModel(object):
 			tf.set_random_seed(self.seed)
 			return [mlp_classification(self.input_dim, self.classes[i].shape[-1], reg=self.reg) for i in range(self.nb_model)]
 		elif self.framework == 'sklearn':
-			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), alpha=self.reg, random_state=self.seed) for _ in range(self.nb_model)]
+			print("when initializing models, reg is indeed [{}]".format(self.reg))
+			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), alpha=self.reg, random_state=self.seed, verbose=True, tol=1e-3) for _ in range(self.nb_model)]
 		elif self.framework in ['random', 'status_quo']:
 			np.random.seed(self.seed)
 			return []
@@ -131,7 +133,10 @@ class ClassificationModel(object):
 				#model.fit(x_train, to_categorical(y_train[:,index] - y_train[:,index].min(), num_classes=self.classes[index].shape[-1]))
 				model.fit(x_train, y_train[:,index]-y_train[:,index].min())
 			elif self.framework == 'sklearn':
+				print("starting to train at: [{}]".format(time.ctime(time.time())))
+				start = time.time()
 				model.fit(x_train, y_train[:, index])
+				print("training time was {}s".format(int(time.time() - start)))
 				train_score = model.score(x_train, y_train[:, index])
 				print("train score q={}: {}".format(self.q, train_score))
 
@@ -160,6 +165,7 @@ class ClassificationModel(object):
 	def save_weights(self):
 		for index, model in enumerate(self.model_list):
 			path = self.filename(index)
+			print("saving model weights at {}".format(path))
 			if self.framework == 'keras':
 				model.save_weights(path)
 			elif self.framework == 'sklearn':
@@ -183,7 +189,7 @@ class ClassificationModel(object):
 				test_score = model.score(x_test, y_test[:, index])
 				print("test score q={}: {}".format(self.q, test_score))
 
-def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125], nb_clf=3, framework='sklearn', seed_min=0, seed_nb=1):
+def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .125], nb_clf=3, framework='sklearn', seed_min=0, seed_nb=1, reg=1e-4):
 	"""
 	returns a trained model on the dataset of human demonstrations 
 	for each quantile
@@ -211,7 +217,8 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 										env_name=env_name,
 										q=q,
 										framework=framework,
-										seed=seed)
+										seed=seed,
+										reg=reg)
 
 			# train
 			model.fit(dataset.obs, dataset.acs)
@@ -296,7 +303,7 @@ def plot(env_name, dataset_name, seed_min=0, seed_nb=1, framework='sklearn', qua
 
 if __name__=="__main__":
 	parser = argparse.ArgumentParser()
-	parser.add_argument("--reg", action="store", default=1e-3, type=float)
+	parser.add_argument("--reg", action="store", default=1e-4, type=float)
 	parser.add_argument("--hidden_size", action="store", default=20, type=int)
 	parser.add_argument("--dataset_name", action="store", default='ryan', type=str)
 	parser.add_argument("--env_name", action="store", default="Hopper-v2", type=str)
@@ -312,7 +319,7 @@ if __name__=="__main__":
 	args = parser.parse_args()
 
 	if 'train' in args.do:
-		train(dataset_name=args.dataset_name, env_name=args.env_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, quantiles=args.quantiles)
+		train(dataset_name=args.dataset_name, env_name=args.env_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, quantiles=args.quantiles, reg=args.reg)
 	if 'test' in args.do:
 		test(args.env_name, dataset_name=args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, aggregate_method=args.aggregate_method, n_trajectories=args.number_trajectories, quantiles=args.quantiles, render=args.render)
 	if 'plot' in args.do:
