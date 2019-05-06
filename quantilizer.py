@@ -10,7 +10,7 @@ import tempfile
 import argparse
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
-from helpers import graph_one
+from helpers import graph_one, plot_seeds
 import keras
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation
@@ -87,7 +87,7 @@ def mlp_classification(input_dim, output_size, hidden_size=20, reg=1e-4):
 
 class ClassificationModel(object):
 	def __init__(self, nb_clf, input_dim, dataset_name,
-				env_name, q, framework='sklearn', reg=1e-4, hidden_size=20, aggregate_method='continuous', seed=0, path='', tol=1e-5):
+				env_name, q, framework='sklearn', reg=1e-4, hidden_size=20, aggregate_method='continuous', seed=0, path='', tol=1e-4):
 		self.nb_clf = nb_clf
 		self.framework = framework
 		self.dataset_name = dataset_name
@@ -286,7 +286,9 @@ def test(env_name='Hopper-v2', dataset_name='ryan', horizon=None, quantiles=[1.0
 	
 	return result_list
 
-def plot(env_name, dataset_name, seed_min=0, seed_nb=1, framework='sklearn', quantiles=[1.0, .5, .25, .125], barplot=False, aggregate_method='continuous'):
+def plot(env_name, dataset_name, seed_min=0, seed_nb=1, framework='sklearn', quantiles=[1.0, .5, .25, .125], plotstyle=None, aggregate_method='continuous'):
+	tr_list, pr_list = [], []
+	
 	for seed in range(seed_min, seed_min + seed_nb):
 		proxy_filename = 'log/rewards/{}_{}_{}_{}_{}_proxy.npy'.format(dataset_name, env_name, framework, aggregate_method, seed)
 		true_filename = 'log/rewards/{}_{}_{}_{}_{}_true.npy'.format(dataset_name, env_name, framework, aggregate_method, seed)
@@ -298,11 +300,18 @@ def plot(env_name, dataset_name, seed_min=0, seed_nb=1, framework='sklearn', qua
 		pr_imit = [sum(traj) for traj in proxy_rews_list[0]]
 		print('[{} {} {} traj seed {}]: tr={}+/-{} (med={}) and pr={}+/-{} (med={})'.format(aggregate_method, framework, len(tr_imit), seed, int(np.mean(tr_imit)), int(np.std(tr_imit)), int(np.median(tr_imit)), int(100 * np.mean(pr_imit)), int(100 * np.std(pr_imit)), int(100 * np.median(pr_imit))))
 		
-		if barplot:
+		# book-keeping for the multiple seeds plot
+		tr_list.append([np.median([sum(traj) for traj in true_arr]) for true_arr in true_rews_list])
+		pr_list.append([np.median([100 * sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list])
+
+		if plotstyle == 'barplot':
 			opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
 			true_rewards = [np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]]
 			proxy_rewards = [np.mean([sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [opt_val[1]]
 			graph_one(true_rewards, proxy_rewards, quantiles, env_name, dataset_name, framework=framework, seed=seed)
+	
+	if plotstyle == 'plot_seeds':
+		plot_seeds(tr_list, pr_list, quantiles, env_name, dataset_name, framework=framework)
 
 if __name__=="__main__":
 	parser = argparse.ArgumentParser()
@@ -318,7 +327,7 @@ if __name__=="__main__":
 	parser.add_argument("--number_trajectories", action="store", default=10, type=int)
 	parser.add_argument('--quantiles', nargs='+', default=None, type=float)
 	parser.add_argument('--render', default=False, type=bool)
-	parser.add_argument('--barplot', default=False, type=bool)
+	parser.add_argument('--plotstyle', default=None, type=str)
 	parser.add_argument('--path', default='', type=str)
 	args = parser.parse_args()
 
@@ -327,4 +336,4 @@ if __name__=="__main__":
 	if 'test' in args.do:
 		test(args.env_name, dataset_name=args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, aggregate_method=args.aggregate_method, n_trajectories=args.number_trajectories, quantiles=args.quantiles, render=args.render, path=args.path)
 	if 'plot' in args.do:
-		plot(args.env_name, args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, quantiles=args.quantiles, barplot=args.barplot, aggregate_method=args.aggregate_method)
+		plot(args.env_name, args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, quantiles=args.quantiles, plotstyle=args.plotstyle, aggregate_method=args.aggregate_method)

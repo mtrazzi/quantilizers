@@ -259,7 +259,7 @@ def plot_rollouts(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_com
             
             rollouts_save_path = 'log/fig/{}_{}_{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, framework, aggregate_method, int(1000 * quantile), n_components, axis)
             plt.savefig(rollouts_save_path)
-
+            
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-p','--path_list', nargs='+', help='<Required> Set flag')

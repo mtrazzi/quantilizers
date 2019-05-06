@@ -84,3 +84,53 @@ def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, framewo
     plt.savefig(filename)
     # plt.show()
     plt.close()
+
+
+def plot_seeds(tr, pr, quantiles, env_name, dataset_name, m=MaxNLocator, framework='keras', width=.35):
+    """ 
+    takes as input a list [true rewards for seed i, true rewards for seed (i+1), ...] and a proxy reward list, 
+    and plots all the results for all seeds as a scattered plot
+    """
+    
+    n_quantiles = len(quantiles)
+    n_seeds = len(tr)
+    tr_sum, pr_sum = np.zeros_like(quantiles), np.zeros_like(quantiles)
+    plt.figure(figsize=(4.3, 3.2))
+    seed_ticks = np.arange(n_quantiles)+width/2
+
+    # Initialize the two axes
+    ax1 = plt.subplot(111)
+    ax1.set_ylabel("True Reward (V)")
+    ax2 = ax1.twinx()
+    ax2.set_ylabel("Explicit reward (U)")
+
+    ### Plot black datapoints for each seeds
+    for i in range(n_seeds):
+        print("for seed {} true reward is {} and proxy reward is {}".format(i, tr[i], pr[i]))
+        ax1.plot(seed_ticks - width/2, tr[i], 'o', color='black')
+        ax2.plot(seed_ticks + width/2, pr[i], 'o', color='black')
+        tr_sum += tr[i]
+        pr_sum += pr[i]
+    
+    ### Plot the average of true reward per seeds
+    bar1 = ax1.bar(np.arange(len(tr_sum)), tr_sum / n_seeds, width, label="True reward", color='g')
+    bar2 = ax2.bar(np.arange(len(pr_sum)) + width, pr_sum / n_seeds, width, label="Explicit reward", color='r')
+
+    #optimiser = "Deep Q" if env_name == 'MountainCar-v0' else "PPO"
+    #xticks = ["imitation"] + [str(i) for i in quantiles[1:]] + [optimiser]
+    xticks = [str(i) for i in quantiles]
+    
+    plt.xticks(np.arange(len(tr_sum))+width/2, xticks)
+    plt.xlabel("q values")
+    plt.legend(loc='best')
+    lines = (bar1, bar2)
+    labels = [l.get_label() for l in lines]
+    ax1.yaxis.set_major_locator(m(nbins=n_quantiles))
+    ax2.yaxis.set_major_locator(m(nbins=n_quantiles))
+    filename = 'log/fig/multiseed_{}_{}_{}_{}'.format(dataset_name, env_name, framework, datetime.now().strftime("%m%d-%H%M%S"))
+    print("saving results in {}.png".format(filename))
+    if not os.path.exists('log/fig'):
+        os.makedirs('log/fig')
+    plt.savefig(filename)
+    # plt.show()
+    plt.close()
