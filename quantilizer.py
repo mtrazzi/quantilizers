@@ -10,7 +10,7 @@ import tempfile
 import argparse
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
-from helpers import graph_one, plot_seeds
+from helpers import graph_one, plot_seeds, plot_distribution
 import keras
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation
@@ -87,7 +87,7 @@ def mlp_classification(input_dim, output_size, hidden_size=20, reg=1e-4):
 
 class ClassificationModel(object):
 	def __init__(self, nb_clf, input_dim, dataset_name,
-				env_name, q, framework='sklearn', reg=1e-4, hidden_size=20, aggregate_method='continuous', seed=0, path='', tol=1e-4):
+				env_name, q, framework='sklearn', reg=1e-4, hidden_size=20, aggregate_method='continuous', seed=0, path='', tol=1e-4, early_stopping=False, validation_fraction=0.3, batch_size=128, n_iter_no_change=1000):
 		self.nb_clf = nb_clf
 		self.framework = framework
 		self.dataset_name = dataset_name
@@ -100,6 +100,9 @@ class ClassificationModel(object):
 		self.hidden_size = hidden_size
 		self.seed = seed
 		self.tol = tol
+		self.early_stopping = early_stopping
+		self.validation_fraction = validation_fraction
+		self.batch_size = batch_size
 		self.model_list = self.init_models()
 		self.aggregate_method = aggregate_method
 		self.model_path = 'log/models' + '/' + path
@@ -113,8 +116,8 @@ class ClassificationModel(object):
 			tf.set_random_seed(self.seed)
 			return [mlp_classification(self.input_dim, self.classes[i].shape[-1], reg=self.reg) for i in range(self.nb_model)]
 		elif self.framework == 'sklearn':
-			print("when initializing models, reg is [{}] and tol is [{}]".format(self.reg, self.tol))
-			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), alpha=self.reg, random_state=self.seed, verbose=True, tol=self.tol) for _ in range(self.nb_model)]
+			print("when initializing models, reg is [{}], tol is [{}], early_stopping is[{}], hidden_size is [{}], validation_fraction is [{}] and batch_size is [{}]".format(self.reg, self.tol, self.early_stopping, self.hidden_size, self.validation_fraction, self.batch_size))
+			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), alpha=self.reg, random_state=self.seed, verbose=True) for _ in range(self.nb_model)]
 		elif self.framework in ['random', 'status_quo']:
 			np.random.seed(self.seed)
 			return []
@@ -288,11 +291,13 @@ def test(env_name='Hopper-v2', dataset_name='ryan', horizon=None, quantiles=[1.0
 
 def plot(env_name, dataset_name, seed_min=0, seed_nb=1, framework='sklearn', quantiles=[1.0, .5, .25, .125], plotstyle=None, aggregate_method='continuous'):
 	tr_list, pr_list = [], []
+	opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
+
 	
 	for seed in range(seed_min, seed_min + seed_nb):
+		# loading rewards from testing
 		proxy_filename = 'log/rewards/{}_{}_{}_{}_{}_proxy.npy'.format(dataset_name, env_name, framework, aggregate_method, seed)
 		true_filename = 'log/rewards/{}_{}_{}_{}_{}_true.npy'.format(dataset_name, env_name, framework, aggregate_method, seed)
-		#print("for plots: loading from [{}] and [{}]".format(proxy_filename, true_filename))
 		proxy_rews_list, true_rews_list = np.load(proxy_filename), np.load(true_filename)
 
 		# printing specific stats
@@ -301,16 +306,24 @@ def plot(env_name, dataset_name, seed_min=0, seed_nb=1, framework='sklearn', qua
 		print('[{} {} {} traj seed {}]: tr={}+/-{} (med={}) and pr={}+/-{} (med={})'.format(aggregate_method, framework, len(tr_imit), seed, int(np.mean(tr_imit)), int(np.std(tr_imit)), int(np.median(tr_imit)), int(100 * np.mean(pr_imit)), int(100 * np.std(pr_imit)), int(100 * np.median(pr_imit))))
 		
 		# book-keeping for the multiple seeds plot
-		tr_list.append([np.median([sum(traj) for traj in true_arr]) for true_arr in true_rews_list])
-		pr_list.append([np.median([100 * sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list])
-
+		if plotstyle == 'median_seeds':
+			tr_list.append([np.median([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]])
+			pr_list.append([np.median([100 * sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [100 * opt_val[1]])
+		if plotstyle == 'mean_seeds':
+			tr_list.append([np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]])
+			pr_list.append([np.mean([100 * sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [100 * opt_val[1]])
 		if plotstyle == 'barplot':
-			opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
 			true_rewards = [np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]]
 			proxy_rewards = [np.mean([sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [opt_val[1]]
 			graph_one(true_rewards, proxy_rewards, quantiles, env_name, dataset_name, framework=framework, seed=seed)
+		if plotstyle == 'distribution':
+			tr_list.append(tr_imit)
+			pr_list.append(pr_imit)
+
+	if plotstyle == 'distribution':
+		plot_distribution(tr_list, pr_list, env_name, dataset_name, quantiles[0], seed_min, seed_nb)
 	
-	if plotstyle == 'plot_seeds':
+	if plotstyle in ['mean_seeds', 'median_seeds']:
 		plot_seeds(tr_list, pr_list, quantiles, env_name, dataset_name, framework=framework)
 
 if __name__=="__main__":

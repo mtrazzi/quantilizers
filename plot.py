@@ -45,6 +45,15 @@ def smoothed_rets(filename, factor=0.99):
         smoothed_data.append(weighted_average)
     return np.array(smoothed_data)
 
+def smoothed_plt_plot(data, label="", factor=0.9):
+    smoothed_data = []
+    #weighted_average = np.mean(data)
+    weighted_average = data[0]
+    for ret in data:
+        weighted_average = factor * weighted_average + (1-factor) * ret
+        smoothed_data.append(weighted_average)
+    plt.plot(np.array(smoothed_data), label=label)
+
 def plot_smoothed_rets(file_list, factor=0.99, labels=None):
     if not labels:
         labels = file_list
@@ -257,9 +266,63 @@ def plot_rollouts(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_com
             #     plt.draw()
             #     plt.pause(0.1)
             
-            rollouts_save_path = 'log/fig/{}_{}_{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, framework, aggregate_method, int(1000 * quantile), n_components, axis)
+            #rollouts_save_path = 'log/fig/{}_{}_{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, framework, aggregate_method, int(1000 * quantile), n_components, axis)
+            rollouts_save_path = 'log/fig/seed#{}_axis#{}'.format(seed,axis)
             plt.savefig(rollouts_save_path)
+
+def predict_dataset(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_components=3, aggregate_method='continuous', framework='sklearn', nb_trajectories=100, seed=3, alpha=0.2, path="", nb_clf=3):
+    
+    # load model
+    env = RobustRewardEnv(env_name)
+    model = ClassificationModel(nb_clf, env.observation_space.shape[0], dataset_name, env_name, q=quantile, framework=framework, aggregate_method=aggregate_method, seed=seed, path=path)
+    model.load_weights()
+
+    # load dataset
+    filename = 'log/{}/{}.npz'.format(env_name, dataset_name)
+    print("loading dataset: [{}]".format(filename))
+    dataset = Dataset(filename, quantile=quantile)
+
+    # we dump the predicted dataset because it's very long to predict
+    path = 'log/{}/{}.pred'.format(env_name, dataset_name)
+    if not os.path.exists(path):
+        # predict dataset
+        print("Starting to predict the dataset:")
+        acs = []
+        for index, ob in enumerate(dataset.obs):
+            print("prediction observation #{}/{}".format(index, len(dataset.obs)))
+            acs.append(model.predict(ob))
+        acs = np.array(acs)
+    else:
+        acs = load(path)
+
+    # fit pca components to dataset
+    pca = load('log/models/{}.pca'.format(dataset_name))
+    obs = pca.transform(dataset.obs)
+
+    obs = dataset.obs.reshape(-1, dataset.obs.shape[-1])
+    acs = acs.reshape(-1, acs.shape[-1])
+
+    # plot pca for each "classifier axis"
+    for axis in range(3):
+        colors = format_sequence_per_classifier(transform_labels(acs), axis=axis)
+
+        if n_components == 2:
+            plt.scatter(obs[:, 0], obs[:, 1], c=colors, alpha=alpha)
+        elif n_components == 3:
+            fig = plt.figure(figsize=(100,100))
+            plt.title("pca for top quantile q={} of {}'s dataset".format(quantile, dataset_name))
+            ax1 = fig.add_subplot(111, projection='3d')
+            ax1.scatter(obs[:, 0], obs[:, 1], obs[:, 2], c=colors, linewidth=0, alpha=alpha)
+
+            # # rotate the axes and update
+            # for angle in range(0, 3):
+            #     ax1.view_init(30, angle * 120)
+            #     plt.draw()
+            #     plt.pause(0.1)
             
+            rollouts_save_path = 'log/fig/predict_dataset_{}_{}_{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, framework, aggregate_method, int(1000 * quantile), n_components, axis)
+            plt.savefig(rollouts_save_path)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-p','--path_list', nargs='+', help='<Required> Set flag')
@@ -275,6 +338,7 @@ def main():
     parser.add_argument('--nb_trajectories', default=100, type=int)
     parser.add_argument('--seed', default=3, type=int)
     parser.add_argument('--alpha', default=0.02, type=float)
+    parser.add_argument('--path', default='', type=str)
     args = parser.parse_args()
     if (args.mode == 'smooth'):
         plot_smoothed_rets(args.path_list, args.discount, args.label_list)
@@ -290,6 +354,8 @@ def main():
         plot_dataset(dataset_name=args.dataset_name, alpha=args.alpha)
     elif (args.mode == 'pca_rollouts'):
         plot_rollouts(quantile=args.quantile, dataset_name=args.dataset_name, framework=args.framework, aggregate_method=args.aggregate_method, nb_trajectories=args.nb_trajectories, seed=args.seed)
+    elif (args.mode == 'predict_dataset'):
+        predict_dataset(quantile=args.quantile, dataset_name=args.dataset_name, framework=args.framework, aggregate_method=args.aggregate_method, nb_trajectories=args.nb_trajectories, seed=args.seed, path=args.path)
 
 
 if __name__ == '__main__':

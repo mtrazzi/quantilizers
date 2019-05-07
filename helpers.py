@@ -5,6 +5,7 @@ import numpy as np
 import cv2
 import os
 from datetime import datetime
+import seaborn as sns
 
 ENV_BUMPER_AREAS = np.load('log/env_bumper_areas.npy')
 
@@ -86,17 +87,18 @@ def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, framewo
     plt.close()
 
 
-def plot_seeds(tr, pr, quantiles, env_name, dataset_name, m=MaxNLocator, framework='keras', width=.35):
+def plot_seeds(tr, pr, quantiles, env_name, dataset_name, m=MaxNLocator, framework='keras', width=.35, title=""):
     """ 
     takes as input a list [true rewards for seed i, true rewards for seed (i+1), ...] and a proxy reward list, 
     and plots all the results for all seeds as a scattered plot
     """
-    
+
+    plt.title("Using same hyperparams as in the paper")
     n_quantiles = len(quantiles)
     n_seeds = len(tr)
-    tr_sum, pr_sum = np.zeros_like(quantiles), np.zeros_like(quantiles)
+    tr_sum, pr_sum = np.zeros(n_quantiles + 1), np.zeros(n_quantiles + 1)
     plt.figure(figsize=(4.3, 3.2))
-    seed_ticks = np.arange(n_quantiles)+width/2
+    seed_ticks = np.arange(n_quantiles + 1)+width/2
 
     # Initialize the two axes
     ax1 = plt.subplot(111)
@@ -116,9 +118,9 @@ def plot_seeds(tr, pr, quantiles, env_name, dataset_name, m=MaxNLocator, framewo
     bar1 = ax1.bar(np.arange(len(tr_sum)), tr_sum / n_seeds, width, label="True reward", color='g')
     bar2 = ax2.bar(np.arange(len(pr_sum)) + width, pr_sum / n_seeds, width, label="Explicit reward", color='r')
 
-    #optimiser = "Deep Q" if env_name == 'MountainCar-v0' else "PPO"
-    #xticks = ["imitation"] + [str(i) for i in quantiles[1:]] + [optimiser]
-    xticks = [str(i) for i in quantiles]
+    optimiser = "Deep Q" if env_name == 'MountainCar-v0' else "PPO"
+    xticks = ["imitation"] + [str(i) for i in quantiles[1:]] + [optimiser]
+    #xticks = [str(i) for i in quantiles] + [optimiser]
     
     plt.xticks(np.arange(len(tr_sum))+width/2, xticks)
     plt.xlabel("q values")
@@ -133,4 +135,22 @@ def plot_seeds(tr, pr, quantiles, env_name, dataset_name, m=MaxNLocator, framewo
         os.makedirs('log/fig')
     plt.savefig(filename)
     # plt.show()
+    plt.close()
+
+def plot_distribution(tr_list, pr_list, env_name, dataset_name, quantile, seed_min, seed_nb):
+    from plot import smoothed_plt_plot
+    from dataset import Dataset
+    filename = 'log/{}/{}.npz'.format(env_name, dataset_name)
+    dataset = Dataset(filename, quantile=quantile)
+    sns.distplot(dataset.ep_rets, label='true reward in dataset')
+    for i in range(seed_nb):
+        sns.distplot([sum(traj) for traj in tr_list[i]], label='seed {}'.format(seed_min + i))
+    plt.legend(loc='upper left')
+    plt.savefig('log/fig/tr_distribution_{}'.format(datetime.now().strftime("%m%d-%H%M%S")))
+    plt.close()
+    sns.distplot(dataset.proxy, label='proxy reward in dataset')
+    for i in range(seed_nb):
+        sns.distplot([sum(traj) for traj in pr_list[i]], label='seed {}'.format(seed_min + i))
+    plt.legend(loc='upper left')
+    plt.savefig('log/fig/pr_distribution_{}'.format(datetime.now().strftime("%m%d-%H%M%S")))
     plt.close()
