@@ -22,12 +22,17 @@ class Dataset(object):
     """contains the filtered data for a particular quantile value q"""
 
     def __init__(self, expert_path, quantile=0.5):
+        # load data
         traj_data = split_by_quantile(np.load(expert_path), quantile)
         self.obs = np.reshape(traj_data['obs'], [-1, np.prod(traj_data['obs'].shape[2:])])
         self.acs = np.reshape(traj_data['acs'], [-1, np.prod(traj_data['acs'].shape[2:])])
+
+        # shuffle data
+        # from sklearn.utils import shuffle
+        # self.obs, self.acs = shuffle(self.obs, self.acs)
+
+        # for plots
         self.ep_rets = traj_data['ep_rets']
         proxy_list = traj_data['obs'][:,:,4]
         self.proxy = [np.sum(pr) / np.count_nonzero(pr) for pr in proxy_list]
-        #np.random.shuffle(self.ep_rets)
-        #np.random.shuffle(self.proxy)
         self.ep_rets = traj_data['ep_rets']

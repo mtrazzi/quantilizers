@@ -87,7 +87,7 @@ def mlp_classification(input_dim, output_size, hidden_size=20, reg=1e-4):
 
 class ClassificationModel(object):
 	def __init__(self, nb_clf, input_dim, dataset_name,
-				env_name, q, framework='sklearn', reg=1e-4, hidden_size=20, aggregate_method='continuous', seed=0, path='', tol=1e-4, early_stopping=False, validation_fraction=0.3, batch_size=128, n_iter_no_change=1000):
+				env_name, q, framework='sklearn', reg=1e-4, hidden_size=20, aggregate_method='continuous', seed=0, path='', tol=1e-4, early_stopping=False, validation_fraction=0.3, batch_size=128, max_iter=1000):
 		self.nb_clf = nb_clf
 		self.framework = framework
 		self.dataset_name = dataset_name
@@ -117,7 +117,7 @@ class ClassificationModel(object):
 			return [mlp_classification(self.input_dim, self.classes[i].shape[-1], reg=self.reg) for i in range(self.nb_model)]
 		elif self.framework == 'sklearn':
 			print("when initializing models, reg is [{}], tol is [{}], early_stopping is[{}], hidden_size is [{}], validation_fraction is [{}] and batch_size is [{}]".format(self.reg, self.tol, self.early_stopping, self.hidden_size, self.validation_fraction, self.batch_size))
-			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), alpha=self.reg, random_state=self.seed, verbose=True) for _ in range(self.nb_model)]
+			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), shuffle=False, alpha=self.reg, random_state=self.seed, tol=self.tol, max_iter=1000, verbose=True) for _ in range(self.nb_model)]
 		elif self.framework in ['random', 'status_quo']:
 			np.random.seed(self.seed)
 			return []
@@ -279,25 +279,25 @@ def test(env_name='Hopper-v2', dataset_name='ryan', horizon=None, quantiles=[1.0
 			print("->testing for q={} took {}s".format(quantiles[model_nb], 
 												time.time()-start))
 
-		if not os.path.exists('log/rewards'):
-			os.makedirs('log/rewards')	
-		np.save('log/rewards/{}_{}_{}_{}_{}_true'.format(dataset_name, env_name, framework, aggregate_method, seed), true_rews)
-		np.save('log/rewards/{}_{}_{}_{}_{}_proxy'.format(dataset_name, env_name, framework, aggregate_method, seed), 
+		if not os.path.exists('log/rewards/{}'.format(path)):
+			os.makedirs('log/rewards/{}'.format(path))	
+		np.save('log/rewards/{}{}_{}_{}_{}_{}_true'.format(path, dataset_name, env_name, framework, aggregate_method, seed), true_rews)
+		np.save('log/rewards/{}{}_{}_{}_{}_{}_proxy'.format(path, dataset_name, env_name, framework, aggregate_method, seed), 
 		proxy_rews)
 		
 		result_list.append([ob_list, ac_list])
 	
 	return result_list
 
-def plot(env_name, dataset_name, seed_min=0, seed_nb=1, framework='sklearn', quantiles=[1.0, .5, .25, .125], plotstyle=None, aggregate_method='continuous'):
+def plot(env_name, dataset_name, seed_min=0, seed_nb=1, framework='sklearn', quantiles=[1.0, .5, .25, .125], plotstyle=None, aggregate_method='continuous', path=''):
 	tr_list, pr_list = [], []
 	opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
 
 	
 	for seed in range(seed_min, seed_min + seed_nb):
 		# loading rewards from testing
-		proxy_filename = 'log/rewards/{}_{}_{}_{}_{}_proxy.npy'.format(dataset_name, env_name, framework, aggregate_method, seed)
-		true_filename = 'log/rewards/{}_{}_{}_{}_{}_true.npy'.format(dataset_name, env_name, framework, aggregate_method, seed)
+		proxy_filename = 'log/rewards/{}{}_{}_{}_{}_{}_proxy.npy'.format(path, dataset_name, env_name, framework, aggregate_method, seed)
+		true_filename = 'log/rewards/{}{}_{}_{}_{}_{}_true.npy'.format(path, dataset_name, env_name, framework, aggregate_method, seed)
 		proxy_rews_list, true_rews_list = np.load(proxy_filename), np.load(true_filename)
 
 		# printing specific stats
@@ -349,4 +349,4 @@ if __name__=="__main__":
 	if 'test' in args.do:
 		test(args.env_name, dataset_name=args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, aggregate_method=args.aggregate_method, n_trajectories=args.number_trajectories, quantiles=args.quantiles, render=args.render, path=args.path)
 	if 'plot' in args.do:
-		plot(args.env_name, args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, quantiles=args.quantiles, plotstyle=args.plotstyle, aggregate_method=args.aggregate_method)
+		plot(args.env_name, args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, framework=args.framework, quantiles=args.quantiles, plotstyle=args.plotstyle, aggregate_method=args.aggregate_method, path=args.path)
