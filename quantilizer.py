@@ -10,7 +10,7 @@ import tempfile
 import argparse
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
-from helpers import graph_one, plot_seeds, plot_distribution
+from helpers import graph_one, plot_seeds, plot_distribution, plot_proxy, boxplot
 import keras
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation
@@ -117,7 +117,7 @@ class ClassificationModel(object):
 			return [mlp_classification(self.input_dim, self.classes[i].shape[-1], reg=self.reg) for i in range(self.nb_model)]
 		elif self.framework == 'sklearn':
 			print("when initializing models, reg is [{}], tol is [{}], early_stopping is[{}], hidden_size is [{}], validation_fraction is [{}] and batch_size is [{}]".format(self.reg, self.tol, self.early_stopping, self.hidden_size, self.validation_fraction, self.batch_size))
-			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), shuffle=False, alpha=self.reg, random_state=self.seed, tol=self.tol, max_iter=1000, verbose=True) for _ in range(self.nb_model)]
+			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), shuffle=False, alpha=self.reg, random_state=self.seed, tol=self.tol, max_iter=1000, verbose=True, solver='adam', batch_size=200) for _ in range(self.nb_model)]
 		elif self.framework in ['random', 'status_quo']:
 			np.random.seed(self.seed)
 			return []
@@ -226,6 +226,7 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 										reg=reg,
 										path=path)
 
+
 			# train
 			model.fit(dataset.obs, dataset.acs)
 
@@ -309,7 +310,7 @@ def plot(env_name, dataset_name, seed_min=0, seed_nb=1, framework='sklearn', qua
 		if plotstyle == 'median_seeds':
 			tr_list.append([np.median([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]])
 			pr_list.append([np.median([100 * sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [100 * opt_val[1]])
-		if plotstyle == 'mean_seeds':
+		if plotstyle in ['mean_seeds', 'boxplot']:
 			tr_list.append([np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]])
 			pr_list.append([np.mean([100 * sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [100 * opt_val[1]])
 		if plotstyle == 'barplot':
@@ -322,9 +323,11 @@ def plot(env_name, dataset_name, seed_min=0, seed_nb=1, framework='sklearn', qua
 
 	if plotstyle == 'distribution':
 		plot_distribution(tr_list, pr_list, env_name, dataset_name, quantiles[0], seed_min, seed_nb)
-	
-	if plotstyle in ['mean_seeds', 'median_seeds']:
+	elif plotstyle in ['mean_seeds', 'median_seeds']:
 		plot_seeds(tr_list, pr_list, quantiles, env_name, dataset_name, framework=framework)
+	elif plotstyle == 'boxplot':
+		boxplot(tr_list, pr_list, quantiles, dataset_name)
+
 
 if __name__=="__main__":
 	parser = argparse.ArgumentParser()

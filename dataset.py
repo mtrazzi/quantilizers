@@ -7,7 +7,9 @@ def split_by_quantile(data, q, env_name='Hopper-v2'):
         sum_positions = data['obs'][:,:,0].sum(axis=-1)
         furthest_right = np.argsort(sum_positions)
     elif env_name == 'Hopper-v2':
-        furthest_right = np.argsort([np.sum(forward_traj) for forward_traj in data['obs'][:,:,4]])
+        #furthest_right = np.argsort([np.sum(forward_traj) for forward_traj in data['obs'][:,:,4]])
+        #furthest_right = np.argsort([np.sum(pr) / np.count_nonzero(pr) for pr in data['obs'][:,:,4]])
+        furthest_right = np.argsort(data['ep_rets'])
     threshold = int(len(data['acs'])*q)
     out = {}
     ind = furthest_right[-threshold:]
@@ -26,10 +28,11 @@ class Dataset(object):
         traj_data = split_by_quantile(np.load(expert_path), quantile)
         self.obs = np.reshape(traj_data['obs'], [-1, np.prod(traj_data['obs'].shape[2:])])
         self.acs = np.reshape(traj_data['acs'], [-1, np.prod(traj_data['acs'].shape[2:])])
-
+        
         # shuffle data
-        # from sklearn.utils import shuffle
-        # self.obs, self.acs = shuffle(self.obs, self.acs)
+        from sklearn.utils import shuffle
+        # consistent shuffle with seed=0
+        self.obs, self.acs = shuffle(self.obs, self.acs, random_state=0)
 
         # for plots
         self.ep_rets = traj_data['ep_rets']

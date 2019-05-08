@@ -154,3 +154,29 @@ def plot_distribution(tr_list, pr_list, env_name, dataset_name, quantile, seed_m
     plt.legend(loc='upper left')
     plt.savefig('log/fig/pr_distribution_{}'.format(datetime.now().strftime("%m%d-%H%M%S")))
     plt.close()
+
+def plot_proxy(data, traj_length=1000, method='sum'):
+    reshaped_data = data.reshape(-1, traj_length, data.shape[-1])
+    proxy_list = reshaped_data[:,:,4]
+    proxy = [np.sum(pr) for pr in proxy_list] if method == 'sum' else [np.sum(pr) / np.count_nonzero(pr) for pr in proxy_list]
+    plt.plot(proxy)
+    plt.show()
+
+def boxplot(tr, pr, quantiles, dataset_name):
+    """ 
+    takes as input a list [true rewards for seed i, true rewards for seed (i+1), ...] and a proxy reward list, 
+    and plots all the results for all seeds as a boxplot
+    """
+
+    def plot_boxplot(arr, dataset_name, title, quantiles):
+        n_quantile = len(arr[0])
+        quantile_list = [[arr_seed[i] for arr_seed in arr] for i in range(n_quantile)]
+        plt.title(title)
+        plt.boxplot(quantile_list, labels=[str(q) for q in quantiles] + ['PPO'])
+        filename = 'log/fig/boxplot_{}_{}_{}'.format(dataset_name, title, datetime.now().strftime("%m%d-%H%M%S"))
+        plt.savefig(filename)
+        plt.close()
+
+    # Proxy reward
+    plot_boxplot(tr, dataset_name, 'true_reward', quantiles)
+    plot_boxplot(pr, dataset_name, 'proxy_reward', quantiles)
