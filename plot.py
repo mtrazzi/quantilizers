@@ -62,14 +62,19 @@ def plot_smoothed_rets(file_list, factor=0.99, labels=None):
     plt.legend()
     plt.show()
 
-def plot_scatter_plot(path_list, label_list):
+def plot_scatter_plot(path_list, label_list, proxy='mean', alpha=0.2):
     for index, filename in enumerate(path_list):
         data = np.load(filename)
         true_rews = data['ep_rets']
-        proxy_rews = [np.mean(traj[:,4]) for traj in data['obs']]
+        if proxy == 'mean':
+            proxy_rews = [np.mean(traj[:,4]) for traj in data['obs']]
+        elif proxy == 'mean_padding':
+            proxy_rews = [np.sum(traj[:,4]) / np.count_nonzero(traj[:,4]) for traj in data['obs']]
+        elif proxy == 'sum':
+            proxy_rews = [np.sum(traj[:,4]) for traj in data['obs']]
         plt.xlabel("average forward learn / ankle angle (explicit reward)")
         plt.ylabel("moving to the right (true reward)")
-        plt.scatter(proxy_rews, true_rews, 1)
+        plt.scatter(proxy_rews, true_rews, alpha=alpha)
 
         # cf. https://stackoverflow.com/a/50199100
         gradient, intercept, r_value, _, _ = stats.linregress(proxy_rews,true_rews)

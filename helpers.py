@@ -172,7 +172,7 @@ def boxplot(tr, pr, quantiles, dataset_name):
         n_quantile = len(arr[0])
         quantile_list = [[arr_seed[i] for arr_seed in arr] for i in range(n_quantile)]
         plt.title(title)
-        plt.boxplot(quantile_list, labels=[str(q) for q in quantiles] + ['PPO'])
+        plt.boxplot(quantile_list, patch_artist=True, sym="", whis=[5, 95], labels=[str(q) for q in quantiles] + ['PPO'])
         filename = 'log/fig/boxplot_{}_{}_{}'.format(dataset_name, title, datetime.now().strftime("%m%d-%H%M%S"))
         plt.savefig(filename)
         plt.close()
