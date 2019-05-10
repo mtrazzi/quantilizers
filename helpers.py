@@ -66,7 +66,7 @@ class RunningMean:
     __call__ = new
 
 
-def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, framework='keras', seed=0, width=.35):
+def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, seed=0, width=.35):
     plt.figure(figsize=(4.3, 3.2))
 
     # True reward
@@ -88,7 +88,7 @@ def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, framewo
     labels = [l.get_label() for l in lines]
     ax1.yaxis.set_major_locator(m(nbins=3))
     ax2.yaxis.set_major_locator(m(nbins=3))
-    filename = 'log/fig/{}_{}_{}_{}_{}'.format(dataset_name, env_name, framework, seed, datetime.now().strftime("%m%d-%H%M%S"))
+    filename = 'log/fig/{}_{}_{}_{}'.format(dataset_name, env_name, seed, datetime.now().strftime("%m%d-%H%M%S"))
     print("saving results in {}.png".format(filename))
     if not os.path.exists('log/fig'):
         os.makedirs('log/fig')
@@ -97,7 +97,7 @@ def graph_one(tr, pr, quantiles,  env_name, dataset_name, m=MaxNLocator, framewo
     plt.close()
 
 
-def plot_seeds(tr, pr, quantiles, env_name, dataset_name, m=MaxNLocator, framework='keras', width=.35, title=""):
+def plot_seeds(tr, pr, quantiles, env_name, dataset_name, m=MaxNLocator, width=.35, title=""):
     """ 
     takes as input a list [true rewards for seed i, true rewards for seed (i+1), ...] and a proxy reward list, 
     and plots all the results for all seeds as a scattered plot
@@ -139,7 +139,7 @@ def plot_seeds(tr, pr, quantiles, env_name, dataset_name, m=MaxNLocator, framewo
     labels = [l.get_label() for l in lines]
     ax1.yaxis.set_major_locator(m(nbins=n_quantiles))
     ax2.yaxis.set_major_locator(m(nbins=n_quantiles))
-    filename = 'log/fig/multiseed_{}_{}_{}_{}'.format(dataset_name, env_name, framework, datetime.now().strftime("%m%d-%H%M%S"))
+    filename = 'log/fig/multiseed_{}_{}_{}'.format(dataset_name, env_name, datetime.now().strftime("%m%d-%H%M%S"))
     print("saving results in {}.png".format(filename))
     if not os.path.exists('log/fig'):
         os.makedirs('log/fig')

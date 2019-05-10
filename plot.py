@@ -3,7 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import argparse 
 from scipy import stats
-from quantilizer import ClassificationModel
 from wrappers import RobustRewardEnv
 from dataset import Dataset
 from sklearn.metrics import confusion_matrix
@@ -20,8 +19,9 @@ from quantilizer import test
 from joblib import dump, load
 import os.path
 import time
+from helpers import graph_one, plot_seeds, plot_distribution, plot_proxy, boxplot
 
-def load_ep_rets(filename, debug=False):
+def load_ep_rets(filename):
     data = np.load(filename)['ep_rets']
     return data
 
@@ -115,20 +115,17 @@ def transform_labels(labels):
         result[index] = pos_pred[0] * (3 ** 2) + pos_pred[1] * 3 + pos_pred[2]
     return result
 
-def predicted_labels(aggregate_method='argmax', nb_clf=3, dataset_name='ryan', env_name='Hopper-v2', framework='sklearn', seed=0, q=1.0, test_fraction = 0.01):
+def predicted_labels(dataset_name='ryan', env_name='Hopper-v2', seed=0, q=1.0, test_fraction = 0.01):
     # load the dataset
     filename = 'log/{}/{}.npz'.format(env_name, dataset_name)
     #print("confusion matrix for data: [{}]".format(filename))
     dataset = Dataset(filename, quantile=q)
 
     # load the model
-    model = ClassificationModel(nb_clf=nb_clf,
-                                input_dim=dataset.obs.shape[-1],
-                                dataset_name=dataset_name,
+    from quantilizer import ClassificationModel
+    model = ClassificationModel(dataset_name=dataset_name,
                                 env_name=env_name,
                                 q=q,
-                                framework=framework,
-                                aggregate_method=aggregate_method,
                                 seed=seed)
     model.load_weights()
 
@@ -139,10 +136,10 @@ def predicted_labels(aggregate_method='argmax', nb_clf=3, dataset_name='ryan', e
 
     return transform_labels(y_true), transform_labels(y_pred)
 
-def print_confusion_matrix(aggregate_method='argmax', nb_clf=3, dataset_name='michael', env_name='Hopper-v2', framework='sklearn', seed=0, q=1.0, test_fraction = 0.01):
+def print_confusion_matrix(dataset_name='michael', env_name='Hopper-v2', seed=0, q=1.0, test_fraction = 0.01):
 
     # print the confusion matrix after transforming labels to integers
-    proc_true, proc_pred = predicted_labels(aggregate_method=aggregate_method, nb_clf=nb_clf, dataset_name=dataset_name, env_name=env_name, framework=framework, seed=seed, q=q, test_fraction=test_fraction)
+    proc_true, proc_pred = predicted_labels(dataset_name=dataset_name, env_name=env_name, seed=seed, q=q, test_fraction=test_fraction)
     mat = confusion_matrix(proc_true, proc_pred, labels=range(27))
     
     index_list = [[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]]
@@ -236,13 +233,13 @@ def plot_dataset(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_comp
         plt.savefig(dataset_save_path)
         print("plotting time was {}s".format(int(time.time() - start)))
 
-def plot_rollouts(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_components=3, aggregate_method='continuous', framework='sklearn', nb_trajectories=100, seed=3, alpha=0.2):
+def plot_rollouts(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_components=3, nb_trajectories=100, seed=3, alpha=0.2):
     
     # load pca components already fitted to dataset
     pca = load('log/models/{}.pca'.format(dataset_name))
     
     # transform observations from rollouts according to fitted pca
-    results_list = test(env_name=env_name, dataset_name=dataset_name, aggregate_method=aggregate_method, n_trajectories=nb_trajectories, quantiles=[quantile], framework=framework, seed_min=seed)
+    results_list = test(env_name=env_name, dataset_name=dataset_name, n_trajectories=nb_trajectories, quantiles=[quantile], seed_min=seed)
     obs, acs = pad_with_zeros(*results_list[0])
     obs = obs.reshape(-1, obs.shape[-1])
     acs = acs.reshape(-1, acs.shape[-1])
@@ -264,22 +261,15 @@ def plot_rollouts(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_com
             plt.title("pca for top quantile q={} of {}'s dataset".format(quantile, dataset_name))
             ax1 = fig.add_subplot(111, projection='3d')
             ax1.scatter(obs[:, 0], obs[:, 1], obs[:, 2], c=colors_rollouts, linewidth=0, alpha=alpha)
-
-            # # rotate the axes and update
-            # for angle in range(0, 3):
-            #     ax1.view_init(30, angle * 120)
-            #     plt.draw()
-            #     plt.pause(0.1)
-            
-            #rollouts_save_path = 'log/fig/{}_{}_{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, framework, aggregate_method, int(1000 * quantile), n_components, axis)
             rollouts_save_path = 'log/fig/seed#{}_axis#{}'.format(seed,axis)
             plt.savefig(rollouts_save_path)
 
-def predict_dataset(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_components=3, aggregate_method='continuous', framework='sklearn', nb_trajectories=100, seed=3, alpha=0.2, path="", nb_clf=3):
+def predict_dataset(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_components=3, nb_trajectories=100, seed=3, alpha=0.2, path="", nb_clf=3):
     
     # load model
     env = RobustRewardEnv(env_name)
-    model = ClassificationModel(nb_clf, env.observation_space.shape[0], dataset_name, env_name, q=quantile, framework=framework, aggregate_method=aggregate_method, seed=seed, path=path)
+    from quantilizer import ClassificationModel
+    model = ClassificationModel(dataset_name, env_name, q=quantile, seed=seed, path=path)
     model.load_weights()
 
     # load dataset
@@ -318,28 +308,56 @@ def predict_dataset(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_c
             plt.title("pca for top quantile q={} of {}'s dataset".format(quantile, dataset_name))
             ax1 = fig.add_subplot(111, projection='3d')
             ax1.scatter(obs[:, 0], obs[:, 1], obs[:, 2], c=colors, linewidth=0, alpha=alpha)
-
-            # # rotate the axes and update
-            # for angle in range(0, 3):
-            #     ax1.view_init(30, angle * 120)
-            #     plt.draw()
-            #     plt.pause(0.1)
-            
-            rollouts_save_path = 'log/fig/predict_dataset_{}_{}_{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, framework, aggregate_method, int(1000 * quantile), n_components, axis)
+            rollouts_save_path = 'log/fig/predict_dataset_{}_{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, int(1000 * quantile), n_components, axis)
             plt.savefig(rollouts_save_path)
+
+def plot(env_name, dataset_name, seed_min=0, seed_nb=1, quantiles=[1.0, .5, .25, .125], plotstyle=None, path=''):
+	tr_list, pr_list = [], []
+	opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
+
+	
+	for seed in range(seed_min, seed_min + seed_nb):
+		# loading rewards from testing
+		proxy_filename = 'log/rewards/{}{}_{}_{}_proxy.npy'.format(path, dataset_name, env_name, seed)
+		true_filename = 'log/rewards/{}{}_{}_{}_true.npy'.format(path, dataset_name, env_name, seed)
+		proxy_rews_list, true_rews_list = np.load(proxy_filename), np.load(true_filename)
+
+		# printing specific stats
+		tr_imit = [sum(traj) for traj in true_rews_list[0]]
+		pr_imit = [sum(traj) for traj in proxy_rews_list[0]]
+		print('[n={} seed={}]: tr={}+/-{} (med={}) and pr={}+/-{} (med={})'.format(len(tr_imit), seed, int(np.mean(tr_imit)), int(np.std(tr_imit)), int(np.median(tr_imit)), int(100 * np.mean(pr_imit)), int(100 * np.std(pr_imit)), int(100 * np.median(pr_imit))))
+		
+		# book-keeping for the multiple seeds plot
+		if plotstyle == 'median_seeds':
+			tr_list.append([np.median([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]])
+			pr_list.append([np.median([100 * sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [100 * opt_val[1]])
+		if plotstyle in ['mean_seeds', 'boxplot']:
+			tr_list.append([np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]])
+			pr_list.append([np.mean([100 * sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [100 * opt_val[1]])
+		if plotstyle == 'barplot':
+			true_rewards = [np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]]
+			proxy_rewards = [np.mean([sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [opt_val[1]]
+			graph_one(true_rewards, proxy_rewards, quantiles, env_name, dataset_name, seed=seed)
+		if plotstyle == 'distribution':
+			tr_list.append(tr_imit)
+			pr_list.append(pr_imit)
+
+	if plotstyle == 'distribution':
+		plot_distribution(tr_list, pr_list, env_name, dataset_name, quantiles[0], seed_min, seed_nb)
+	elif plotstyle in ['mean_seeds', 'median_seeds']:
+		plot_seeds(tr_list, pr_list, quantiles, env_name, dataset_name)
+	elif plotstyle == 'boxplot':
+		boxplot(tr_list, pr_list, quantiles, dataset_name)
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-p','--path_list', nargs='+', help='<Required> Set flag')
     parser.add_argument('-D','--dataset_list', nargs='+')
     parser.add_argument('-l','--label_list', nargs='+', default=None)
-    parser.add_argument('-d', '--debug', default=False)
     parser.add_argument('--discount', default=0.99)
     parser.add_argument('--mode', required=True)
     parser.add_argument('--dataset_name', default='ryan')
     parser.add_argument('--quantile', default=1.0, type=float)
-    parser.add_argument('--framework', default='sklearn', type=str)
-    parser.add_argument('--aggregate_method', default='continuous', type=str)
     parser.add_argument('--nb_trajectories', default=100, type=int)
     parser.add_argument('--seed', default=3, type=int)
     parser.add_argument('--alpha', default=0.02, type=float)
@@ -358,9 +376,9 @@ def main():
     elif (args.mode == 'pca_dataset'):
         plot_dataset(dataset_name=args.dataset_name, alpha=args.alpha)
     elif (args.mode == 'pca_rollouts'):
-        plot_rollouts(quantile=args.quantile, dataset_name=args.dataset_name, framework=args.framework, aggregate_method=args.aggregate_method, nb_trajectories=args.nb_trajectories, seed=args.seed)
+        plot_rollouts(quantile=args.quantile, dataset_name=args.dataset_name, nb_trajectories=args.nb_trajectories, seed=args.seed)
     elif (args.mode == 'predict_dataset'):
-        predict_dataset(quantile=args.quantile, dataset_name=args.dataset_name, framework=args.framework, aggregate_method=args.aggregate_method, nb_trajectories=args.nb_trajectories, seed=args.seed, path=args.path)
+        predict_dataset(quantile=args.quantile, dataset_name=args.dataset_name, nb_trajectories=args.nb_trajectories, seed=args.seed, path=args.path)
 
 
 if __name__ == '__main__':
