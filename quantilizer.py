@@ -234,10 +234,7 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 			model.save_weights()
 			trained_models.append(model)
 
-			del dataset
-	
-	with open("log/training_time.txt", "a+") as f:
-		f.write("\ntraining time on {} dataset using {} on {} was in total {}s and on average {}s per seed, so fast!".format(dataset_name, framework, datetime.now().strftime("%m%d-%H%M%S"), time.time() - start, (time.time()-start)/seed_nb))
+			del dataset	
 
 def load_models(weights_files_list, env_name):
 	obs_dim, acs_dim = (2, 1) if env_name == 'MountainCar-v0' else (11, 27)
@@ -338,7 +335,7 @@ if __name__=="__main__":
 	parser.add_argument("--do",  nargs='+', default=None)
 	parser.add_argument("--seed_min", action="store", default=0, type=int)
 	parser.add_argument("--seed_nb", action="store", default=1, type=int)
-	parser.add_argument("--framework", action="store", default="keras", type=str)
+	parser.add_argument("--framework", action="store", default="sklearn", type=str)
 	parser.add_argument("--aggregate_method", action="store", default="continuous", type=str)
 	parser.add_argument("--number_trajectories", action="store", default=10, type=int)
 	parser.add_argument('--quantiles', nargs='+', default=None, type=float)

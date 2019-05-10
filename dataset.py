@@ -41,6 +41,10 @@ class Dataset(object):
             # reshape data depending on the environment            
             self.obs = np.reshape(traj_data['obs'], [-1, np.prod(traj_data['obs'].shape[2:])])
             self.acs = np.reshape(traj_data['acs'], [-1, np.prod(traj_data['acs'].shape[2:])])
+            # remove zeros
+            padding_indexes = (self.obs != 0).reshape(-1, self.obs.shape[-1])[:,0] != 0
+            self.obs = self.obs[padding_indexes]
+            self.acs = self.acs[padding_indexes]
             # consistent shuffle with seed=0
             self.obs, self.acs = shuffle(self.obs, self.acs, random_state=0)
         elif env_name == 'VideoPinballNoFrameskip-v4':
