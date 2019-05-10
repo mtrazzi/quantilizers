@@ -9,7 +9,7 @@ from torch import optim
 from torch.autograd import Variable
 
 from joblib import dump, load
-import os
+import os, time
 
 PARAMS = {
         'max_steps':        10000,
@@ -88,6 +88,40 @@ class ConvModel(object):
         self.net.cuda()
         self.optimizer = optim.Adam(net.parameters(), lr=PARAMS['learning_rate'], weight_decay=PARAMS['weight_decay'])
         self.criterion = nn.CrossEntropyLoss()
+        self.running_loss = 0
+        self.start = time.time()
+    
+    def training_step(self, X, y):
+        self.optimizer.zero_grad()
+        out = net(X)
+        loss = criterion(out, y)
+        loss.backward()
+        self.optimizer.step()
+
+        self.running_loss += loss.data.item()
+        if step % print_freq == 0:
+            outte = net(self.Xte)
+            losste = criterion(outte, self.yte)
+            predte = torch.argmax(outte, 1)
+            accte = torch.sum(predte==self.yte).data.item()/len(predte)
+            print_str = 'step: {}\t train loss: {}\ttest loss: {}\ttest acc: {}\t time:{}'.format(step, 
+                running_loss/print_freq, losste.data.item(), accte, time.time() - start_time)
+            print(print_str)
+            print(print_str, file=open('log.txt', 'a'))
+            self.running_loss=0.
+
+    def fit(self, train_set, test_set):
+        test_idx = np.random.choice(range(len(test_set)), 1024)
+        self.Xte, self.yte = test_set.get_batch_quads(test_idx)
+        self.Xte = torch.tensor(Xte).cuda()
+        self.yte = torch.tensor(yte).cuda()
+
+        for step in range(PARAMS['max_steps']):
+            idx = np.random.choice(range(len(train_set)), PARAMS['batch_size'])
+            X, y = train_set.get_batch_quads(idx)
+            X = torch.tensor(X).cuda()
+            y = torch.tensor(y).cuda()
+            self.training_step(X,y)        
 
 class Quantilizer(object):
     def __init__(self, dataset_name, env_name, q, seed=0, path=''):
@@ -97,7 +131,7 @@ class Quantilizer(object):
             self.model = ConvModel(q)
     
     def fit(self, X, y):
-        pass
+        self.model.fit(X, y)
     
     def save_weights(self):
         pass

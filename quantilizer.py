@@ -68,7 +68,7 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 
 		for q in quantiles:
 			# load data
-			dataset = Dataset('log/{}/{}.npz'.format(env_name, dataset_name), quantile=q)
+			dataset = Dataset('log/{}/{}.npz'.format(env_name, dataset_name), env_name, q)
 
 			model = Quantilizer(dataset_name=dataset_name,
 								env_name=env_name,
