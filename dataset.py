@@ -1,34 +1,81 @@
 from sklearn.utils import shuffle
 import os.path as osp
+import cv2
 import pandas as pd
 import numpy as np
 import joblib
 import os
 
-TRAJ_NAME = joblib.load('log/traj_names.dump')
+TRAJ_NAMES = joblib.load('log/traj_names.dump')
+
+LABELS = {0:0,1:1,2:2,3:3,4:4,5:5,6:3,7:4,8:3,9:4,10:6,11:7,12:8,13:6,14:7,15:8,16:7,17:8,}
+
+class VideoPinballDataset(object):
+    """special class to help curate dataset for the VideoPinball environment, where q is the quantile"""
+    
+    def __init__(self, q):
+        self.data_dir = 'log/VideoPinballNoFrameskip-v4/'
+        traj_dir = osp.join(self.data_dir, 'trajectories/pinball')
+        self.screens_dir = osp.join(self.data_dir, 'screens/pinball')
+        self.traj_names = [t.split('.')[0] for t in sorted(os.listdir(traj_dir))] if q == 1.0 else TRAJ_NAMES[q]
+        self.trajs = [pd.read_csv('{}/{}.txt'.format(traj_dir, traj_name), header=1).iloc[:4000] 
+                for traj_name in self.traj_names]
+        lens = np.array([len(i) - 3 for i in self.trajs])
+        self.lensums = np.array([sum(lens[:i]) for i in range(len(lens))] + [sum(lens)])
+        
+    def _get_traj_idx(self, idx):
+        traj_idx = (idx>=self.lensums).argmin() - 1
+        frame_no = idx % self.lensums[traj_idx]
+        return (traj_idx, frame_no)
+
+    def _warp_frames(self, frames, width=84, height=84):
+        out = np.zeros((len(frames), 250, 160, 3), dtype=np.uint8)
+        for i, frame in enumerate(frames):
+            out[i, 20:-20,:,:] = frame
+        out = cv2.cvtColor(out.reshape(-1, 160, 3), cv2.COLOR_BGR2GRAY).reshape(len(frames), -1, 160)
+        out = np.array([cv2.resize(fr, (width, height), interpolation=cv2.INTER_AREA) for fr in out])
+        return out
+
+    def get_batch(self, idx):
+        traj_frame_idxs = [self._get_traj_idx(i) for i in idx]
+        items = [cv2.imread('{}/{}/{}.png'.format(self.screens_dir, self.traj_names[traj_idx], frame_no))
+            for traj_idx, frame_no in traj_frame_idxs]
+        items = self._warp_frames(items)
+        labels = np.array([LABELS[self.trajs[traj_idx][' action'].iloc[frame_no]] for traj_idx, frame_no in traj_frame_idxs])
+        return items, labels
+
+    def get_batch_quads(self, idx):
+        items = []
+        labels = []
+        for i in idx:
+            quad_obs, label = self.get_batch(range(i, i+4))
+            labels.append(label[-1])
+            items.append(quad_obs)
+        return np.array(items), np.array(labels)
 
 def split_by_quantile(data, q, env_name='Hopper-v2'):
     """splits the data according to the quantile q of the Dataset"""
     
     if env_name == 'MountainCar-v0':
-        sum_positions = data['obs'][:,:,0].sum(axis=-1)
-        furthest_right = np.argsort(sum_positions)
+        proxy_list = data['obs'][:,:,0].sum(axis=-1)
     elif env_name == 'Hopper-v2':
         proxy_list = [np.sum(traj[:,4]) / np.count_nonzero(traj[:,4]) for traj in data['obs']]
-        furthest_right = np.argsort(proxy_list)
     elif env_name == 'VideoPinballNoFrameskip-v4':
-        data_dir = osp.join('log', env_name)
-        traj_names = [t.split('.')[0] for t in sorted(os.listdir(osp.join(data_dir, 'trajectories/pinball')))] if q == 1.0 else TRAJ_NAMES[q]
-        
+        proxy_list = data['ep_rets']
+    
+    # argsort w.r.t U
+    furthest_right = np.argsort(proxy_list)
+
+    # filter w.r.t quantile
     threshold = int(len(data['acs'])*q)
-    out = {}
     ind = furthest_right[-threshold:]
-    out['obs'] = data['obs'][ind,:,:]
+
+    out = {}
+    if env_name == 'Hopper-v2':
+        out['obs'] = data['obs'][ind,:,:]
+    elif env_name == 'VideoPinballNoFrameskip-v4':
+        pass
     out['acs'] = data['acs'][ind,:]
-    out['rews'] = data['rews'][ind,:]
-    out['done'] = data['done'][ind,:]
-    out['ep_rets'] = data['ep_rets'][ind]
-    out['proxy'] = np.array(proxy_list)[ind]
     return out
 
 class Dataset(object):
@@ -37,7 +84,7 @@ class Dataset(object):
     def __init__(self, expert_path=None, env_name='Hopper-v2', quantile=1.0):
         if env_name == 'Hopper-v2':
             # load data
-            traj_data = split_by_quantile(np.load(expert_path), quantile)
+            traj_data = split_by_quantile(np.load(expert_path), quantile, env_name)
             # reshape data depending on the environment            
             self.obs = np.reshape(traj_data['obs'], [-1, np.prod(traj_data['obs'].shape[2:])])
             self.acs = np.reshape(traj_data['acs'], [-1, np.prod(traj_data['acs'].shape[2:])])
@@ -48,15 +95,4 @@ class Dataset(object):
             # consistent shuffle with seed=0
             self.obs, self.acs = shuffle(self.obs, self.acs, random_state=0)
         elif env_name == 'VideoPinballNoFrameskip-v4':
-            traj_names = [t.split('.')[0] for t in sorted(os.listdir(osp.join(data_dir, 'trajectories/pinball')))]
-            trajs = [pd.read_csv(osp.join(data_dir,'trajectories/pinball/{}.txt'.format(traj_name)), header=1).iloc[:4000] 
-                    for traj_name in traj_names]
-            import ipdb; ipdb.set_trace()            
-            traj_data = split_by_quantile(trajs, quantile, env_name)
-            # reshape things
-
-def main():
-    data = Dataset(env_name='VideoPinballNoFrameskip-v4', quantile=1.0)
-
-if __name__=='__main__':
-    main()
+            self.data = VideoPinballDataset(quantile)

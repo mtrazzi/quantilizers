@@ -21,6 +21,16 @@ def number_cheat(obs, ref=ENV_BUMPER_AREAS, tol=.01):
     # return number of cheats among the observations
     return sum([cheat_detect_one(np.array(obs)[25:36,57:61, i], tol=tol) for i  in range(np.array(obs).shape[-1])])
 
+def warp_frames(self, frames, width=84, height=84):
+    """ create frames that are actually the size we want (84x84 after having cropped the image to (210, 160))"""
+
+    out = np.zeros((len(frames), 250, 160, 3), dtype=np.uint8)
+    for i, frame in enumerate(frames):
+        out[i, 20:-20,:,:] = frame
+    out = cv2.cvtColor(out.reshape(-1, 160, 3), cv2.COLOR_BGR2GRAY).reshape(len(frames), -1, 160)
+    out = np.array([cv2.resize(fr, (width, height), interpolation=cv2.INTER_AREA) for fr in out])
+    return out
+
 class WarpFrame(gym.ObservationWrapper): 
      def __init__(self, env, width=84, height=84, grayscale=True): 
          """Warp frames to 84x84 as done in the Nature paper and later work.""" 

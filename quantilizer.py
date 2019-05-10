@@ -116,7 +116,6 @@ class ClassificationModel(object):
 			tf.set_random_seed(self.seed)
 			return [mlp_classification(self.input_dim, self.classes[i].shape[-1], reg=self.reg) for i in range(self.nb_model)]
 		elif self.framework == 'sklearn':
-			print("when initializing models, reg is [{}], tol is [{}], early_stopping is[{}], hidden_size is [{}], validation_fraction is [{}] and batch_size is [{}]".format(self.reg, self.tol, self.early_stopping, self.hidden_size, self.validation_fraction, self.batch_size))
 			return [MLPClassifier(hidden_layer_sizes=(self.hidden_size, self.hidden_size), shuffle=False, alpha=self.reg, random_state=self.seed, tol=self.tol, max_iter=1000, verbose=True, solver='adam', batch_size=200) for _ in range(self.nb_model)]
 		elif self.framework in ['random', 'status_quo']:
 			np.random.seed(self.seed)
@@ -179,7 +178,6 @@ class ClassificationModel(object):
 	def load_weights(self):
 		for index, model in enumerate(self.model_list):
 			path = self.filename(index)
-			print("loading weights from the path [{}]".format(path))
 			if self.framework == 'keras':
 				model.load_weights(path)
 			elif self.framework == 'sklearn':
@@ -260,7 +258,6 @@ def test(env_name='Hopper-v2', dataset_name='ryan', horizon=None, quantiles=[1.0
 			horizon = env.max_episode_steps
 		
 		# loading trained models
-		print("aggregate method here is [{}]".format(aggregate_method))
 		models_list = [ClassificationModel(nb_clf, env.observation_space.shape[0], dataset_name, env_name, q=q, framework=framework, aggregate_method=aggregate_method, seed=seed, path=path) for q in quantiles]
 		for model in models_list:
 			model.load_weights()
