@@ -18,7 +18,7 @@ import numpy as np
 import tensorflow as tf
 
 PARAMS = {
-        'max_steps':        10000,
+        'max_steps':        1,
         'learning_rate':    1e-3,
         'batch_size':       512,
         'weight_decay':     1e-2,
@@ -50,7 +50,8 @@ class ClassificationModel(object):
 	def filename(self, index):
 		return '{}{}_{}_{}_{}f{}.h5'.format(self.model_path, self.dataset_name, self.env_name, self.q, index, self.seed)
 
-	def fit(self, x_train, y_train):
+	def fit(self, dataset):
+		x_train, y_train = dataset.obs, dataset.acs
 		for index, model in enumerate(self.model_list):
 			model.fit(x_train, y_train[:, index])
 			train_score = model.score(x_train, y_train[:, index])
@@ -96,7 +97,7 @@ class DQN(nn.Module):
         return self.fc(conv_out)
 
 class ConvModel(object):
-    def __init__(self, q):
+    def __init__(self, q, path):
         env = RobustRewardEnv('VideoPinballNoFrameskip-v4')
         self.q = q
         self.net = DQN((4, 84, 84), env.action_space.n) 
@@ -106,6 +107,10 @@ class ConvModel(object):
         self.running_loss = 0
         self.start_time = time.time()
         self.logger = Logger('log/train/train_{}'.format(datetime.now().strftime("%m%d-%H%M%S")))
+        model_dir = 'log/models/{}'.format(path)
+        if not os.path.exists(model_dir):
+            os.makedirs(model_dir)
+        self.model_path = '{}models.weight'.format(model_dir)
     
     def training_step(self, X, y, step):
         self.optimizer.zero_grad()
@@ -123,13 +128,14 @@ class ConvModel(object):
             print_str = 'step: {}\t train loss: {}\ttest loss: {}\ttest acc: {}\t time:{}'.format(step, 
                 self.running_loss/PARAMS['print_freq'], losste.data.item(), accte, time.time() - self.start_time)
             print(print_str)
-            print(print_str, file=open('log.txt', 'a'))
+            print(print_str, file=open('log/log.txt', 'a'))
             info = {'train_loss': self.running_loss/PARAMS['print_freq'],'test_loss': losste.data.item(),'test acc': accte}
             for tag, value in info.items():
                 self.logger.scalar_summary(tag, value, step + 1)
             self.running_loss=0.
 
-    def fit(self, train_set, test_set):
+    def fit(self, dataset):
+        train_set, test_set = dataset.train_set, dataset.test_set
         test_idx = np.random.choice(range(len(test_set)), 1024)
         self.Xte, self.yte = test_set.get_batch_quads(test_idx)
         self.Xte, self.yte = torch.tensor(self.Xte).cuda(), torch.tensor(self.yte).cuda()
@@ -141,25 +147,32 @@ class ConvModel(object):
             y = torch.tensor(y).cuda()
             self.training_step(X,y, step)
 
+    def save_weights(self):
+        torch.save(self.net.state_dict(), self.model_path)
+    
+    def load_weights(self):
+        self.net.load_state_dict(torch.load(self.model_path))
+    
+    def predict(self, obs):
+        out = self.net(torch.tensor(np.swapaxes(obs, 1, 2)[np.newaxis, :,:,:]).cuda())
+        return torch.multinomial(nn.functional.softmax(out, 1), 1).item()
+
 class Quantilizer(object):
     def __init__(self, dataset_name, env_name, q, seed=0, path=''):
         self.env_name = env_name
         if env_name in ['MountainCar-v0', 'Hopper-v2']:
-            self.model = ClassificationModel(dataset_name, env_name, q, seed=0, path='')
+            self.model = ClassificationModel(dataset_name, env_name, q, seed=seed, path=path)
         elif env_name in ['VideoPinballNoFrameskip-v4']:
-            self.model = ConvModel(q)
+            self.model = ConvModel(q, path=path)
     
     def fit(self, dataset):
-        if self.env_name in ['MountainCar-v0', 'Hopper-v2']:
-            self.model.fit(dataset.obs, dataset.acs)
-        elif self.env_name in ['VideoPinballNoFrameskip-v4']:
-            self.model.fit(dataset.train_set, dataset.test_set)
+        self.model.fit(dataset)
     
     def save_weights(self):
-        pass
+        self.model.save_weights()
     
     def load_weights(self):
-        pass
+        self.model.load_weights()
     
-    def predict(ob, self):
-        return 0
+    def predict(self, obs):
+        return self.model.predict(obs)
