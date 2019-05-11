@@ -13,15 +13,20 @@ LABELS = {0:0,1:1,2:2,3:3,4:4,5:5,6:3,7:4,8:3,9:4,10:6,11:7,12:8,13:6,14:7,15:8,
 class VideoPinballDataset(object):
     """special class to help curate dataset for the VideoPinball environment, where q is the quantile"""
     
-    def __init__(self, q):
-        self.data_dir = 'log/VideoPinballNoFrameskip-v4/'
+    def __init__(self, q, set_type='train'):
+        self.data_dir = '/home/ryan/ml/atari/baselines/data/atari_v2'
         traj_dir = osp.join(self.data_dir, 'trajectories/pinball')
         self.screens_dir = osp.join(self.data_dir, 'screens/pinball')
         self.traj_names = [t.split('.')[0] for t in sorted(os.listdir(traj_dir))] if q == 1.0 else TRAJ_NAMES[q]
+        train_len = int(0.8*len(self.traj_names))
+        self.traj_names = self.traj_names[:train_len] if set_type == 'train' else self.traj_names[train_len:]
         self.trajs = [pd.read_csv('{}/{}.txt'.format(traj_dir, traj_name), header=1).iloc[:4000] 
                 for traj_name in self.traj_names]
         lens = np.array([len(i) - 3 for i in self.trajs])
         self.lensums = np.array([sum(lens[:i]) for i in range(len(lens))] + [sum(lens)])
+    
+    def __len__(self):
+        return self.lensums[-1]
         
     def _get_traj_idx(self, idx):
         traj_idx = (idx>=self.lensums).argmin() - 1
@@ -41,7 +46,7 @@ class VideoPinballDataset(object):
         items = [cv2.imread('{}/{}/{}.png'.format(self.screens_dir, self.traj_names[traj_idx], frame_no))
             for traj_idx, frame_no in traj_frame_idxs]
         items = self._warp_frames(items)
-        labels = np.array([LABELS[self.trajs[traj_idx][' action'].iloc[frame_no]] for traj_idx, frame_no in traj_frame_idxs])
+        labels = np.array([LABELS[self.trajs[traj_idx]['action'].iloc[frame_no]] for traj_idx, frame_no in traj_frame_idxs])
         return items, labels
 
     def get_batch_quads(self, idx):
@@ -62,7 +67,7 @@ def split_by_quantile(data, q, env_name='Hopper-v2'):
         proxy_list = [np.sum(traj[:,4]) / np.count_nonzero(traj[:,4]) for traj in data['obs']]
     elif env_name == 'VideoPinballNoFrameskip-v4':
         proxy_list = data['ep_rets']
-    
+
     # argsort w.r.t U
     furthest_right = np.argsort(proxy_list)
 
@@ -95,4 +100,5 @@ class Dataset(object):
             # consistent shuffle with seed=0
             self.obs, self.acs = shuffle(self.obs, self.acs, random_state=0)
         elif env_name == 'VideoPinballNoFrameskip-v4':
-            self.data = VideoPinballDataset(quantile)
+            self.train_set = VideoPinballDataset(quantile, 'train')
+            self.test_set = VideoPinballDataset(quantile, 'test')

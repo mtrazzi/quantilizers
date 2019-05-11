@@ -77,7 +77,7 @@ def train(dataset_name='ryan', env_name='Hopper-v2', quantiles=[1.0, .5, .25, .1
 								path=path)
 
 			# train
-			model.fit(dataset.obs, dataset.acs)
+			model.fit(dataset)
 
 			# logging weights and model
 			model.save_weights()
@@ -128,12 +128,12 @@ def test(env_name='Hopper-v2', dataset_name='ryan', quantiles=[1.0, .5, .25, .12
 if __name__=="__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--dataset_name", action="store", default='ryan', type=str)
-	parser.add_argument("--env_name", action="store", default="Hopper-v2", type=str)
-	parser.add_argument("--do",  nargs='+', default=None)
+	parser.add_argument("--env_name", action="store", default="VideoPinballNoFrameskip-v4", type=str)
+	parser.add_argument("--do",  nargs='+', default=['train'])
 	parser.add_argument("--seed_min", action="store", default=0, type=int)
 	parser.add_argument("--seed_nb", action="store", default=1, type=int)
 	parser.add_argument("--number_trajectories", action="store", default=10, type=int)
-	parser.add_argument('--quantiles', nargs='+', default=None, type=float)
+	parser.add_argument('--quantiles', nargs='+', default=[1.0], type=float)
 	parser.add_argument('--render', default=False, type=bool)
 	parser.add_argument('--plotstyle', default=None, type=str)
 	parser.add_argument('--path', default='', type=str)
