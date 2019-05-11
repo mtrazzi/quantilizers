@@ -144,5 +144,5 @@ if __name__=="__main__":
 	if 'test' in args.do:
 		test(args.env_name, dataset_name=args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, n_trajectories=args.number_trajectories, quantiles=args.quantiles, render=args.render, path=args.path)
 	if 'plot' in args.do:
-		from plot import plot
+		from utils.plot import plot
 		plot(args.env_name, args.dataset_name, seed_min=args.seed_min, seed_nb=args.seed_nb, quantiles=args.quantiles, plotstyle=args.plotstyle, path=args.path)

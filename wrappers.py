@@ -3,7 +3,8 @@ import numpy as np
 import itertools as it
 import argparse
 from datetime import datetime
-from helpers import true_video_pinball_reward, WarpFrame, RunningMean, number_cheat
+from utils.helpers import RunningMean, number_cheat
+from utils.atari_wrappers import atari_wrapper
 
 ENV_BUMPER_AREAS = np.load('log/env_bumper_areas.npy')
 
@@ -19,8 +20,8 @@ class RobustRewardEnv(gym.Wrapper):
     def __init__(self, env_name, lamb=1):
         self.env_name = env_name
         self.env = gym.make(env_name)
-        self.running_mean = RunningMean() # for Hopper or Video Pinball
-        self.lamb = lamb # for Video Pinball
+        self.running_mean = RunningMean()
+        self.lamb = lamb
         self.specific_init()
         self.observation_space = self.env.observation_space
         self.action_space = gym.spaces.Discrete(self.num_actions)
@@ -30,12 +31,12 @@ class RobustRewardEnv(gym.Wrapper):
         """initializes necessary attributes depending on the environment"""
 
         if self.env_name == "MountainCar-v0":
-            self.num_actions = self.env.action_space.n # 2 possible actions
+            self.num_actions = self.env.action_space.n
         elif self.env_name == "Hopper-v2":
             self.num_actions = self.env.action_space.shape[0]
         elif self.env_name == "VideoPinballNoFrameskip-v4":
-            self.env = WarpFrame(self.env)
-            self.num_actions = self.env.action_space.n # 9 possible actions
+            self.env = atari_wrapper(self.env_name)
+            self.num_actions = self.env.action_space.n
         else:
             raise ValueError("unknown environment name")
     
@@ -43,7 +44,7 @@ class RobustRewardEnv(gym.Wrapper):
         """returns the proxy reward (the one that the agent observes)"""
 
         if self.env_name == "MountainCar-v0":
-            # for MountainCar our proxy reward is the position
+            # for MountainCar our proxy reward is the position (in obs[0])
             return obs[0]
         elif self.env_name == "Hopper-v2":
             # in obs[4] we have the ankle angle / forward lean
