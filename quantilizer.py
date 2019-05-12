@@ -9,6 +9,10 @@ from models import Quantilizer
 from wrappers import RobustRewardEnv
 from dataset import Dataset
 
+PARAMS = {
+	'max_steps_test': 100,
+}
+
 def traj_segment_generator(pi, env, max_steps, play=True):
 
 	while True:
@@ -17,7 +21,7 @@ def traj_segment_generator(pi, env, max_steps, play=True):
 		d = True
 		prox_rew = 0.0
 		true_rew = 0
-		obs = np.zeros((max_steps, len(ob)))
+		obs = np.zeros((max_steps,) + ob.shape)
 		acs = np.zeros((max_steps, 3))
 		don = np.zeros((max_steps, 1))
 		proxy_rews = np.zeros((max_steps, 1))
@@ -92,7 +96,7 @@ def test(env_name='Hopper-v2', dataset_name='ryan', quantiles=[1.0, .5, .25, .12
 		# setup
 		env = RobustRewardEnv(env_name)
 		proxy_rews, true_rews = [], []
-		max_steps = env.max_episode_steps
+		max_steps = PARAMS['max_steps_test']
 		
 		# loading trained models
 		models_list = [Quantilizer(dataset_name=dataset_name,

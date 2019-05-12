@@ -18,11 +18,12 @@ import numpy as np
 import tensorflow as tf
 
 PARAMS = {
-        'max_steps':        1,
+        'max_steps':        10000,
         'learning_rate':    1e-3,
         'batch_size':       512,
         'weight_decay':     1e-2,
-        'print_freq':       1,
+        'tensorboard_freq': 10,
+        'save_freq':        100,
         }
 
 class Logger(object):
@@ -112,27 +113,27 @@ class ConvModel(object):
             os.makedirs(model_dir)
         self.model_path = '{}models.weight'.format(model_dir)
     
-    def training_step(self, X, y, step):
+    def training_step(self, X, y):
         self.optimizer.zero_grad()
+        import ipdb;ipdb.set_trace()
         out = self.net(X)
         loss = self.criterion(out, y)
         loss.backward()
         self.optimizer.step()
         self.running_loss += loss.data.item()
 
-        if step % PARAMS['print_freq'] == 0:
+        if (self.step + 1) % PARAMS['tensorboard_freq'] == 0:
             outte = self.net(self.Xte)
             losste = self.criterion(outte, self.yte)
             predte = torch.argmax(outte, 1)
             accte = torch.sum(predte==self.yte).data.item()/len(predte)
-            print_str = 'step: {}\t train loss: {}\ttest loss: {}\ttest acc: {}\t time:{}'.format(step, 
-                self.running_loss/PARAMS['print_freq'], losste.data.item(), accte, time.time() - self.start_time)
-            print(print_str)
-            print(print_str, file=open('log/log.txt', 'a'))
-            info = {'train_loss': self.running_loss/PARAMS['print_freq'],'test_loss': losste.data.item(),'test acc': accte}
+            info = {'train_loss': self.running_loss/PARAMS['tensorboard_freq'],'test_loss': losste.data.item(),'test acc': accte}
             for tag, value in info.items():
-                self.logger.scalar_summary(tag, value, step + 1)
+                self.logger.scalar_summary(tag, value, self.step + 1)
             self.running_loss=0.
+        
+        if (self.step + 1) % PARAMS['save_freq'] == 0:
+            self.save_weights()
 
     def fit(self, dataset):
         train_set, test_set = dataset.train_set, dataset.test_set
@@ -145,12 +146,15 @@ class ConvModel(object):
             X, y = train_set.get_batch_quads(idx)
             X = torch.tensor(X).cuda()
             y = torch.tensor(y).cuda()
-            self.training_step(X,y, step)
+            self.step = step
+            self.training_step(X, y)
 
     def save_weights(self):
+        print("[{}] Saving weights at [{}] after {} steps".format(datetime.now().strftime("%Hh%M"), self.model_path, self.step + 1))
         torch.save(self.net.state_dict(), self.model_path)
     
     def load_weights(self):
+        print("Loading weights from [{}]".format(self.model_path))
         self.net.load_state_dict(torch.load(self.model_path))
     
     def predict(self, obs):

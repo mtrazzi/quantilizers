@@ -1,25 +1,25 @@
-import sys
 import numpy as np
 import matplotlib.pyplot as plt
-import argparse 
 from scipy import stats
-from wrappers import RobustRewardEnv
-from dataset import Dataset
+
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
-import itertools
 from sklearn.decomposition import PCA
+
 import seaborn as sn
 import pandas as pd
 from matplotlib import cm
-import os
 from mpl_toolkits.mplot3d import Axes3D
+
 from collections import Counter
-from quantilizer import test
 from joblib import dump, load
-import os.path
-import time
-from helpers import graph_one, plot_seeds, plot_distribution, plot_proxy, boxplot
+import os, time, argparse
+import itertools
+
+import utils.helpers as h
+from dataset import Dataset
+from wrappers import RobustRewardEnv
+from quantilizer import test
 
 def load_ep_rets(filename):
     data = np.load(filename)['ep_rets']
@@ -325,7 +325,7 @@ def plot(env_name, dataset_name, seed_min=0, seed_nb=1, quantiles=[1.0, .5, .25,
 		# printing specific stats
 		tr_imit = [sum(traj) for traj in true_rews_list[0]]
 		pr_imit = [sum(traj) for traj in proxy_rews_list[0]]
-		print('[n={} seed={}]: tr={}+/-{} (med={}) and pr={}+/-{} (med={})'.format(len(tr_imit), seed, int(np.mean(tr_imit)), int(np.std(tr_imit)), int(np.median(tr_imit)), int(100 * np.mean(pr_imit)), int(100 * np.std(pr_imit)), int(100 * np.median(pr_imit))))
+		print('[n={} seed={}]: tr={}+/-{} (med={}) and pr={}+/-{} (med={})'.format(len(tr_imit), seed, int(np.mean(tr_imit)), int(np.std(tr_imit)), int(np.median(tr_imit)), int(np.mean(pr_imit)), int(np.std(pr_imit)), int(np.median(pr_imit))))
 		
 		# book-keeping for the multiple seeds plot
 		if plotstyle == 'median_seeds':
@@ -337,17 +337,17 @@ def plot(env_name, dataset_name, seed_min=0, seed_nb=1, quantiles=[1.0, .5, .25,
 		if plotstyle == 'barplot':
 			true_rewards = [np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]]
 			proxy_rewards = [np.mean([sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [opt_val[1]]
-			graph_one(true_rewards, proxy_rewards, quantiles, env_name, dataset_name, seed=seed)
+			h.graph_one(true_rewards, proxy_rewards, quantiles, env_name, dataset_name, seed=seed)
 		if plotstyle == 'distribution':
 			tr_list.append(tr_imit)
 			pr_list.append(pr_imit)
 
 	if plotstyle == 'distribution':
-		plot_distribution(tr_list, pr_list, env_name, dataset_name, quantiles[0], seed_min, seed_nb)
+		h.plot_distribution(tr_list, pr_list, env_name, dataset_name, quantiles[0], seed_min, seed_nb)
 	elif plotstyle in ['mean_seeds', 'median_seeds']:
-		plot_seeds(tr_list, pr_list, quantiles, env_name, dataset_name)
+		h.plot_seeds(tr_list, pr_list, quantiles, env_name, dataset_name)
 	elif plotstyle == 'boxplot':
-		boxplot(tr_list, pr_list, quantiles, dataset_name)
+		h.boxplot(tr_list, pr_list, quantiles, dataset_name)
 
 def main():
     parser = argparse.ArgumentParser()

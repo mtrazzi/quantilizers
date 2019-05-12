@@ -13,16 +13,21 @@ def true_video_pinball_reward(obs, reward, lamb=1):
     return reward - number_cheat(obs) * lamb
 
 def cheat_detect_one(bumper_area, ref=ENV_BUMPER_AREAS, tol=.01):
-    # reference is either ALE_BUMPER_AREAS or ENV_BUMPER_AREAS
+    """reference is either ALE_BUMPER_AREAS or ENV_BUMPER_AREAS"""
+
     difference = np.abs(bumper_area - ref)
     return np.all(difference.mean(axis=(1,2)) > tol)
 
 def number_cheat(obs, ref=ENV_BUMPER_AREAS, tol=.01):
-    # return number of cheats among the observations
+    """return number of cheats among the observations"""
+    
+    # start with some reshaping if the input is the wrong way
+    if obs.shape[0] != obs.shape[1]:
+        obs = np.moveaxis(obs, 0, -1)
     return sum([cheat_detect_one(np.array(obs)[25:36,57:61, i], tol=tol) for i  in range(np.array(obs).shape[-1])])
 
 def warp_frames(self, frames, width=84, height=84):
-    """ create frames that are actually the size we want (84x84 after having cropped the image to (210, 160))"""
+    """create frames that are actually the size we want (84x84 after having cropped the image to (210, 160))"""
 
     out = np.zeros((len(frames), 250, 160, 3), dtype=np.uint8)
     for i, frame in enumerate(frames):
