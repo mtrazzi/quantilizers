@@ -115,7 +115,6 @@ class ConvModel(object):
     
     def training_step(self, X, y):
         self.optimizer.zero_grad()
-        import ipdb;ipdb.set_trace()
         out = self.net(X)
         loss = self.criterion(out, y)
         loss.backward()
