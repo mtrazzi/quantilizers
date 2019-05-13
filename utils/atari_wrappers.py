@@ -7,6 +7,37 @@ from gym import spaces
 import cv2
 cv2.ocl.setUseOpenCL(False)
 
+ENV_BUMPER_AREAS = np.load('log/env_bumper_areas.npy')
+
+def true_video_pinball_reward(obs, reward, lamb=1):
+    return reward - number_cheat(obs) * lamb
+
+def cheat_detect_one(bumper_area, ref=ENV_BUMPER_AREAS, tol=.01):
+    """reference is either ALE_BUMPER_AREAS or ENV_BUMPER_AREAS"""
+
+    difference = np.abs(bumper_area - ref)
+    return np.all(difference.mean(axis=(1,2)) > tol)
+
+def number_cheat(obs, ref=ENV_BUMPER_AREAS, tol=.01):
+    """return number of cheats among the observations"""
+    
+    # start with some reshaping if the input is the wrong way
+    if obs.shape[0] != obs.shape[1]:
+        obs = np.moveaxis(obs, 0, -1)
+    return sum([cheat_detect_one(np.array(obs)[25:36,57:61, i], tol=tol) for i  in range(np.array(obs).shape[-1])])
+
+class RunningMean:
+    def __init__(self):
+        self.total = 0
+        self.length = 0
+        self.mean = 0
+    def new(self, element):
+        self.total += element
+        self.length += 1
+        self.mean = self.total/self.length
+        return self.mean
+    __call__ = new
+
 class NoopResetEnv(gym.Wrapper):
     def __init__(self, env, noop_max=30):
         """Sample initial states by taking random number of no-ops on reset.

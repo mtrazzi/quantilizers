@@ -10,16 +10,41 @@ import seaborn as sn
 import pandas as pd
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.ticker import MaxNLocator
 
 from collections import Counter
 from joblib import dump, load
+from datetime import datetime
 import os, time, argparse
 import itertools
 
-import utils.helpers as h
 from dataset import Dataset
 from wrappers import RobustRewardEnv
 from quantilizer import test
+
+OPTIMISER_VALUES = {
+    'MountainCar-v0':               [-180.16, -79.79],
+    'Hopper-v2':                    [37.4, 0.603],
+    'VideoPinballNoFrameskip-v4':   [7200, 7200.089]
+}
+
+OPTIMISER_NAMES = {
+    'MountainCar-v0':               'SARSA',
+    'Hopper-v2':                    'PPO',
+    'VideoPinballNoFrameskip-v4':   'Rainbow',
+}
+
+PROXY_NAMES = {
+    'MountainCar-v0':               'Explicit reward (U)',
+    'Hopper-v2':                    'Explicit reward (U)',
+    'VideoPinballNoFrameskip-v4':   'Implicit loss (-I/λ)',
+}
+
+COLORS = {
+    'MountainCar-v0':               {'true': 'g', 'proxy': 'r'},
+    'Hopper-v2':                    {'true': 'g', 'proxy': 'r'},
+    'VideoPinballNoFrameskip-v4':   {'true': 'y', 'proxy': 'r'},
+}
 
 def load_ep_rets(filename):
     data = np.load(filename)['ep_rets']
@@ -311,43 +336,128 @@ def predict_dataset(dataset_name='ryan', env_name='Hopper-v2', quantile=1.0, n_c
             rollouts_save_path = 'log/fig/predict_dataset_{}_{}_{}_pca_{}_{}d_classif#{}'.format(env_name, dataset_name, int(1000 * quantile), n_components, axis)
             plt.savefig(rollouts_save_path)
 
+def plot_seeds(tr, pr, quantiles, env_name, dataset_name, m=MaxNLocator, width=.35, title=""):
+    """ 
+    takes as input a list [true rewards for seed i, true rewards for seed (i+1), ...] and a proxy reward list, 
+    and plots all the results for all seeds as a scattered plot
+    """
+
+    plt.title("Using same hyperparams as in the paper")
+    n_quantiles = len(quantiles)
+    n_seeds = len(tr)
+    tr_sum, opt_sum = np.zeros(n_quantiles + 1), np.zeros(n_quantiles + 1)
+    plt.figure(figsize=(4.3, 3.2))
+    seed_ticks = np.arange(n_quantiles + 1)+width/2
+
+    # Initialize the two axes
+    ax1 = plt.subplot(111)
+    ax1.set_ylabel("True Reward (V)")
+    ax2 = ax1.twinx()
+    ax2.set_ylabel(PROXY_NAMES[env_name])
+
+    ### Plot black datapoints for each seeds
+    for i in range(n_seeds):
+        ax1.plot(seed_ticks - width/2, tr[i], 'o', color='black')
+        optimisation_values =  (np.array(pr[i]) - np.array(tr[i])) if env_name == 'VideoPinballNoFrameskip-v4' else pr[i]
+        ax2.plot(seed_ticks + width/2, optimisation_values, 'o', color='black')
+        tr_sum += tr[i]
+        opt_sum += optimisation_values
+    
+    ### Plot the average of true reward per seeds
+    bar1 = ax1.bar(np.arange(len(tr_sum)), tr_sum / n_seeds, width, label="True reward", color=COLORS[env_name]['true'])
+    bar2 = ax2.bar(np.arange(len(opt_sum)) + width, opt_sum / n_seeds, width, label=PROXY_NAMES[env_name], color=COLORS[env_name]['proxy'])
+
+    xticks = ["imitation"] + [str(i) for i in quantiles[1:]] + [OPTIMISER_NAMES[env_name]]
+    #xticks = [str(i) for i in quantiles] + [optimiser]
+    
+    plt.xticks(np.arange(len(tr_sum))+width/2, xticks)
+    plt.xlabel("q values")
+    lines = (bar1, bar2)
+    plt.legend(loc='upper left')
+    labels = [l.get_label() for l in lines]
+    ax1.yaxis.set_major_locator(m(nbins=n_quantiles))
+    ax2.yaxis.set_major_locator(m(nbins=n_quantiles))
+    filename = 'log/fig/multiseed_{}_{}_{}'.format(dataset_name, env_name, datetime.now().strftime("%m%d-%H%M%S"))
+    print("saving results in {}.png".format(filename))
+    if not os.path.exists('log/fig'):
+        os.makedirs('log/fig')
+    plt.savefig(filename)
+    # plt.show()
+    plt.close()
+
+def plot_distribution(tr_list, pr_list, env_name, dataset_name, quantile, seed_min, seed_nb):
+    from plot import smoothed_plt_plot
+    from dataset import Dataset
+    filename = 'log/{}/{}.npz'.format(env_name, dataset_name)
+    dataset = Dataset(filename, quantile=quantile)
+    sns.distplot(dataset.ep_rets, label='true reward in dataset')
+    for i in range(seed_nb):
+        sns.distplot([sum(traj) for traj in tr_list[i]], label='seed {}'.format(seed_min + i))
+    plt.legend(loc='upper left')
+    plt.savefig('log/fig/tr_distribution_{}'.format(datetime.now().strftime("%m%d-%H%M%S")))
+    plt.close()
+    sns.distplot(dataset.proxy, label='proxy reward in dataset')
+    for i in range(seed_nb):
+        sns.distplot([sum(traj) for traj in pr_list[i]], label='seed {}'.format(seed_min + i))
+    plt.legend(loc='upper left')
+    plt.savefig('log/fig/pr_distribution_{}'.format(datetime.now().strftime("%m%d-%H%M%S")))
+    plt.close()
+
+def boxplot(tr, pr, quantiles, dataset_name):
+    """ 
+    takes as input a list [true rewards for seed i, true rewards for seed (i+1), ...] and a proxy reward list, 
+    and plots all the results for all seeds as a boxplot
+    """
+
+    def plot_boxplot(arr, dataset_name, title, quantiles):
+        n_quantile = len(arr[0])
+        quantile_list = [[arr_seed[i] for arr_seed in arr] for i in range(n_quantile)]
+        plt.title(title)
+        plt.boxplot(quantile_list, patch_artist=True, sym="", whis=[5, 95], labels=[str(q) for q in quantiles] + ['PPO'])
+        filename = 'log/fig/boxplot_{}_{}_{}'.format(dataset_name, title, datetime.now().strftime("%m%d-%H%M%S"))
+        plt.savefig(filename)
+        plt.close()
+
+    # Proxy reward
+    plot_boxplot(tr, dataset_name, 'true_reward', quantiles)
+    plot_boxplot(pr, dataset_name, 'proxy_reward', quantiles)
+
 def plot(env_name, dataset_name, seed_min=0, seed_nb=1, quantiles=[1.0, .5, .25, .125], plotstyle=None, path=''):
-	tr_list, pr_list = [], []
-	opt_val = [-180.16, -79.79] if env_name == 'MountainCar-v0' else [37.4, 0.603]
+    tr_list, pr_list = [], []
+    opt_val = OPTIMISER_VALUES[env_name]
 
-	
-	for seed in range(seed_min, seed_min + seed_nb):
-		# loading rewards from testing
-		proxy_filename = 'log/rewards/{}{}_{}_{}_proxy.npy'.format(path, dataset_name, env_name, seed)
-		true_filename = 'log/rewards/{}{}_{}_{}_true.npy'.format(path, dataset_name, env_name, seed)
-		proxy_rews_list, true_rews_list = np.load(proxy_filename), np.load(true_filename)
+    
+    for seed in range(seed_min, seed_min + seed_nb):
+        # loading rewards from testing
+        proxy_filename = 'log/rewards/{}{}_{}_{}_proxy.npy'.format(path, dataset_name, env_name, seed)
+        true_filename = 'log/rewards/{}{}_{}_{}_true.npy'.format(path, dataset_name, env_name, seed)
+        proxy_rews_list, true_rews_list = np.load(proxy_filename), np.load(true_filename)
 
-		# printing specific stats
-		tr_imit = [sum(traj) for traj in true_rews_list[0]]
-		pr_imit = [sum(traj) for traj in proxy_rews_list[0]]
-		print('[n={} seed={}]: tr={}+/-{} (med={}) and pr={}+/-{} (med={})'.format(len(tr_imit), seed, int(np.mean(tr_imit)), int(np.std(tr_imit)), int(np.median(tr_imit)), int(np.mean(pr_imit)), int(np.std(pr_imit)), int(np.median(pr_imit))))
-		
-		# book-keeping for the multiple seeds plot
-		if plotstyle == 'median_seeds':
-			tr_list.append([np.median([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]])
-			pr_list.append([np.median([100 * sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [100 * opt_val[1]])
-		if plotstyle in ['mean_seeds', 'boxplot']:
-			tr_list.append([np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]])
-			pr_list.append([np.mean([100 * sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [100 * opt_val[1]])
-		if plotstyle == 'barplot':
-			true_rewards = [np.mean([sum(traj) for traj in true_arr]) for true_arr in true_rews_list] + [opt_val[0]]
-			proxy_rewards = [np.mean([sum(traj) for traj in proxy_arr]) for proxy_arr in proxy_rews_list] + [opt_val[1]]
-			h.graph_one(true_rewards, proxy_rewards, quantiles, env_name, dataset_name, seed=seed)
-		if plotstyle == 'distribution':
-			tr_list.append(tr_imit)
-			pr_list.append(pr_imit)
+        # printing specific stats
+        tr_imit = [sum(traj) for traj in true_rews_list[0]]
+        pr_imit = [sum(traj) for traj in proxy_rews_list[0]]
+        print('[n={} seed={}]: tr={}+/-{} (med={}) and pr={}+/-{} (med={})'.format(len(tr_imit), seed, np.mean(tr_imit), np.std(tr_imit), np.median(tr_imit), np.mean(pr_imit), np.std(pr_imit), np.median(pr_imit)))
+        
+        def apply_function(f, arr_list, opt_value):
+            return [f([sum(t) for t in arr]) for arr in arr_list] + [opt_value]
 
-	if plotstyle == 'distribution':
-		h.plot_distribution(tr_list, pr_list, env_name, dataset_name, quantiles[0], seed_min, seed_nb)
-	elif plotstyle in ['mean_seeds', 'median_seeds']:
-		h.plot_seeds(tr_list, pr_list, quantiles, env_name, dataset_name)
-	elif plotstyle == 'boxplot':
-		h.boxplot(tr_list, pr_list, quantiles, dataset_name)
+        def append_results(f, tr, pr, tr_arr, pr_arr):
+            tr.append(apply_function(f,tr_arr, opt_val[0]))
+            pr.append(apply_function(f,pr_arr, opt_val[1]))
+
+        # book-keeping for the multiple seeds plot
+        if plotstyle in ['mean_seeds', 'boxplot']:
+            append_results(np.mean, tr_list, pr_list, true_rews_list, proxy_rews_list)
+        if plotstyle == 'distribution':
+            tr_list.append(tr_imit)
+            pr_list.append(pr_imit)
+
+    if plotstyle == 'distribution':
+        plot_distribution(tr_list, pr_list, env_name, dataset_name, quantiles[0], seed_min, seed_nb)
+    elif plotstyle == 'mean_seeds':
+        plot_seeds(tr_list, pr_list, quantiles, env_name, dataset_name)
+    elif plotstyle == 'boxplot':
+        boxplot(tr_list, pr_list, quantiles, dataset_name)
 
 def main():
     parser = argparse.ArgumentParser()

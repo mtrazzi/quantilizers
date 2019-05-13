@@ -3,10 +3,7 @@ import numpy as np
 import itertools as it
 import argparse
 from datetime import datetime
-from utils.helpers import RunningMean, number_cheat
-from utils.atari_wrappers import atari_wrapper
-
-ENV_BUMPER_AREAS = np.load('log/env_bumper_areas.npy')
+from utils.atari_wrappers import atari_wrapper, RunningMean, number_cheat
 
 class RobustRewardEnv(gym.Wrapper):
     """Gym environment wrapper that defines proxy and true rewards.
@@ -68,8 +65,8 @@ class RobustRewardEnv(gym.Wrapper):
             # update the cheating rate
             cheat = number_cheat(obs)
             self.running_mean(cheat)
-            info['cheats'] = self.running_mean.mean if done else 0
-            info['performance'] = reward - info['cheats'] * self.lamb
+            info['cheat'] = self.running_mean.mean if done else 0
+            info['performance'] = reward - info['cheat'] * self.lamb
         else:
             raise ValueError("unknown environment name")
         return
