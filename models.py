@@ -12,18 +12,18 @@ from joblib import dump, load
 from datetime import datetime
 import os, time
 
-from wrappers import RobustRewardEnv
+from utils.wrappers import RobustRewardEnv
 
 import numpy as np
 import tensorflow as tf
 
 PARAMS = {
-        'max_steps':        10000,
+        'max_steps':        20000,
         'learning_rate':    1e-3,
         'batch_size':       512,
         'weight_decay':     1e-2,
         'tensorboard_freq': 10,
-        'save_freq':        100,
+        'save_freq':        10,
         }
 
 class Logger(object):

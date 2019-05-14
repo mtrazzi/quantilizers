@@ -19,7 +19,7 @@ import os, time, argparse
 import itertools
 
 from dataset import Dataset
-from wrappers import RobustRewardEnv
+from utils.wrappers import RobustRewardEnv
 from quantilizer import test
 
 OPTIMISER_VALUES = {
