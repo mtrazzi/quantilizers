@@ -3,7 +3,7 @@ import numpy as np
 import itertools as it
 import argparse
 from datetime import datetime
-from utils.atari_wrappers import atari_wrapper, RunningMean, number_cheat
+from atari_wrappers import atari_wrapper, RunningMean, number_cheat
 
 class RobustRewardEnv(gym.Wrapper):
     """Gym environment wrapper that defines proxy and true rewards.

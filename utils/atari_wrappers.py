@@ -7,7 +7,7 @@ from gym import spaces
 import cv2
 cv2.ocl.setUseOpenCL(False)
 
-ENV_BUMPER_AREAS = np.load('log/env_bumper_areas.npy')
+ENV_BUMPER_AREAS = np.load('../log/env_bumper_areas.npy')
 
 def true_video_pinball_reward(obs, reward, lamb=1):
     return reward - number_cheat(obs) * lamb
