@@ -6,7 +6,7 @@ from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.decomposition import PCA
 
-import seaborn as sn
+import seaborn as sns
 import pandas as pd
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D

@@ -100,7 +100,7 @@ class Dataset(object):
             # load data
             traj_data = split_by_quantile(np.load(expert_path), quantile, env_name)
             
-            # reshape data depending on the environment            
+            # reshape data depending on the environment
             self.obs = np.reshape(traj_data['obs'], [-1, np.prod(traj_data['obs'].shape[2:])])
             self.acs = np.reshape(traj_data['acs'], [-1, np.prod(traj_data['acs'].shape[2:])])
             

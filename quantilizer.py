@@ -13,6 +13,12 @@ PARAMS = {
 	'max_steps_test': 100,
 }
 
+ACTION_SPACE_DIMS = {
+	'MountainCar-v0':               1,
+    'Hopper-v2':                    3,
+    'VideoPinballNoFrameskip-v4':   1,
+}
+
 def traj_segment_generator(pi, env, max_steps, play=True):
 
 	while True:
@@ -22,7 +28,7 @@ def traj_segment_generator(pi, env, max_steps, play=True):
 		prox_rew = 0.0
 		true_rew = 0
 		obs = np.zeros((max_steps,) + ob.shape)
-		acs = np.zeros((max_steps, 3))
+		acs = np.zeros((max_steps, ACTION_SPACE_DIMS[env.env_name]))
 		don = np.zeros((max_steps, 1))
 		proxy_rews = np.zeros((max_steps, 1))
 		true_rews = np.zeros((max_steps, 1))
@@ -37,6 +43,7 @@ def traj_segment_generator(pi, env, max_steps, play=True):
 				break
 			if play:
 				env.env.render()
+				time.sleep(0.05)
 			ob, prox_rew, d, info = env.step(ac)
 			true_rew = info['performance']
 		yield {'ob': obs[:t+1], 'ac': acs[:t+1], 'done':don[:t+1],

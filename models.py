@@ -108,10 +108,8 @@ class ConvModel(object):
         self.running_loss = 0
         self.start_time = time.time()
         self.logger = Logger('log/train/train_{}'.format(datetime.now().strftime("%m%d-%H%M%S")))
-        model_dir = 'log/models/{}'.format(path)
-        if not os.path.exists(model_dir):
-            os.makedirs(model_dir)
-        self.model_path = '{}models.weight'.format(model_dir)
+        self.model_dir = 'log/models/{}'.format(path)
+        self.model_path = '{}models.weight'.format(self.model_dir)
     
     def training_step(self, X, y):
         self.optimizer.zero_grad()
@@ -150,6 +148,8 @@ class ConvModel(object):
 
     def save_weights(self):
         print("[{}] Saving weights at [{}] after {} steps".format(datetime.now().strftime("%Hh%M"), self.model_path, self.step + 1))
+        if not os.path.exists(self.model_dir):
+            os.makedirs(self.model_dir)
         torch.save(self.net.state_dict(), self.model_path)
     
     def load_weights(self):
