@@ -48,7 +48,7 @@ class ClassificationModel(object):
         self.q = q
         self.model_list = [MLPClassifier(hidden_layer_sizes=(hidden_size, hidden_size),
                                          random_state=self.seed, 
-                                         max_iter=1000, 
+                                         #max_iter=1000, 
                                          verbose=True) 
                                          for _ in range(NB_CLASSIFIERS[env_name])]
         self.model_path = 'log/models' + '/' + path
@@ -68,6 +68,8 @@ class ClassificationModel(object):
         if self.env_name == 'Hopper-v2':
             return [(clf.classes_ * clf.predict_proba(x.reshape(1, -1)).ravel()).sum() for clf in self.model_list]
         elif self.env_name == 'MountainCar-v0':
+            clf = self.model_list[0]
+            #return np.random.choice(clf.classes_, p=clf.predict_proba(x.reshape(1, -1))[0])
             return self.model_list[0].predict(x.reshape(1, -1))[0]
 
     def save_weights(self):

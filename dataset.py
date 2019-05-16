@@ -75,7 +75,7 @@ def split_by_quantile(data, q, env_name='Hopper-v2'):
     """splits the data according to the quantile q of the Dataset"""
     
     if env_name == 'MountainCar-v0':
-        proxy_list = data['obs'][:,:,0].sum(axis=-1)
+        proxy_list = data['obs'][:,:,0].sum(axis=-1) / np.count_nonzero(data['obs'][:,:,0])
     elif env_name == 'Hopper-v2':
         proxy_list = [np.sum(traj[:,4]) / np.count_nonzero(traj[:,4]) for traj in data['obs']]
 
