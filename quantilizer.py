@@ -33,8 +33,7 @@ def traj_segment_generator(pi, env, max_steps, play=True):
 		proxy_rews = np.zeros((max_steps, 1))
 		true_rews = np.zeros((max_steps, 1))
 		for t in range(max_steps):
-			#ac = pi(ob)
-			ac = np.random.randint(env.num_actions)
+			ac = pi(ob)
 			obs[t] = ob
 			acs[t] = ac
 			don[t] = d
@@ -144,7 +143,7 @@ if __name__=="__main__":
 	parser.add_argument("--do",  nargs='+', default=['train'])
 	parser.add_argument("--seed_min", action="store", default=0, type=int)
 	parser.add_argument("--seed_nb", action="store", default=1, type=int)
-	parser.add_argument("--number_trajectories", action="store", default=1, type=int)
+	parser.add_argument("--number_trajectories", action="store", default=10, type=int)
 	parser.add_argument('--quantiles', nargs='+', default=[1.0], type=float)
 	parser.add_argument('--render', default=False, type=bool)
 	parser.add_argument('--plotstyle', default=None, type=str)

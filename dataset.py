@@ -96,13 +96,14 @@ class Dataset(object):
 
     def __init__(self, expert_path=None, env_name='Hopper-v2', quantile=1.0):
         
-        if env_name == 'Hopper-v2':
+        if env_name in ['Hopper-v2', 'MountainCar-v0']:
             # load data
             traj_data = split_by_quantile(np.load(expert_path), quantile, env_name)
             
             # reshape data depending on the environment
             self.obs = np.reshape(traj_data['obs'], [-1, np.prod(traj_data['obs'].shape[2:])])
-            self.acs = np.reshape(traj_data['acs'], [-1, np.prod(traj_data['acs'].shape[2:])])
+            last_dim = np.prod(traj_data['acs'].shape[2:]) if len(traj_data['acs'].shape) > 2 else 1
+            self.acs = np.reshape(traj_data['acs'], [-1, last_dim])
             
             # remove zeros
             padding_indexes = (self.obs != 0).reshape(-1, self.obs.shape[-1])[:,0] != 0

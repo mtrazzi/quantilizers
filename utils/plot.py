@@ -386,7 +386,6 @@ def plot_seeds(tr, pr, quantiles, env_name, dataset_name, m=MaxNLocator, width=.
     plt.close()
 
 def plot_distribution(tr_list, pr_list, env_name, dataset_name, quantile, seed_min, seed_nb):
-    from plot import smoothed_plt_plot
     from dataset import Dataset
     filename = 'log/{}/{}.npz'.format(env_name, dataset_name)
     dataset = Dataset(filename, quantile=quantile)
@@ -396,7 +395,7 @@ def plot_distribution(tr_list, pr_list, env_name, dataset_name, quantile, seed_m
     plt.legend(loc='upper left')
     plt.savefig('log/fig/tr_distribution_{}'.format(datetime.now().strftime("%m%d-%H%M%S")))
     plt.close()
-    sns.distplot(dataset.proxy, label='proxy reward in dataset')
+    #sns.distplot(dataset.proxy, label='proxy reward in dataset')
     for i in range(seed_nb):
         sns.distplot([sum(traj) for traj in pr_list[i]], label='seed {}'.format(seed_min + i))
     plt.legend(loc='upper left')
@@ -431,7 +430,7 @@ def plot(env_name, dataset_name, seed_min=0, seed_nb=1, quantiles=[1.0, .5, .25,
         # loading rewards from testing
         proxy_filename = 'log/rewards/{}{}_{}_{}_proxy.npy'.format(path, dataset_name, env_name, seed)
         true_filename = 'log/rewards/{}{}_{}_{}_true.npy'.format(path, dataset_name, env_name, seed)
-        proxy_rews_list, true_rews_list = np.load(proxy_filename), np.load(true_filename)
+        proxy_rews_list, true_rews_list = np.load(proxy_filename, allow_pickle=True), np.load(true_filename, allow_pickle=True)
 
         # printing specific stats
         tr_imit = [sum(traj) for traj in true_rews_list[0]]

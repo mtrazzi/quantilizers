@@ -26,6 +26,11 @@ PARAMS = {
         'save_freq':        10,
         }
 
+NB_CLASSIFIERS = {
+    'MountainCar-v0':   1,
+    'Hopper-v2':        3,
+}
+
 class Logger(object):
     def __init__(self, log_dir):
         self.writer = tf.summary.FileWriter(log_dir)
@@ -35,38 +40,42 @@ class Logger(object):
         self.writer.add_summary(summary, step)
 
 class ClassificationModel(object):
-	def __init__(self, dataset_name, env_name, q, seed=0, path='', hidden_size=20):
-		self.dataset_name = dataset_name
-		self.env_name = env_name
-		self.seed = seed
-		self.q = q
-		self.model_list = [MLPClassifier(hidden_layer_sizes=(hidden_size, hidden_size),
-										 random_state=self.seed, 
-										 max_iter=1000, 
-										 verbose=True) for _ in range(3)]
-		self.model_path = 'log/models' + '/' + path
-		if not os.path.exists(self.model_path):
-			os.makedirs(self.model_path)
-	
-	def filename(self, index):
-		return '{}{}_{}_{}_{}f{}.h5'.format(self.model_path, self.dataset_name, self.env_name, self.q, index, self.seed)
+    def __init__(self, dataset_name, env_name, q, seed=0, path='', hidden_size=20):
+        self.dataset_name = dataset_name
+        self.env_name = env_name
+        self.seed = seed
+        self.q = q
+        self.model_list = [MLPClassifier(hidden_layer_sizes=(hidden_size, hidden_size),
+                                         random_state=self.seed, 
+                                         max_iter=1000, 
+                                         verbose=True) 
+                                         for _ in range(NB_CLASSIFIERS[env_name])]
+        self.model_path = 'log/models' + '/' + path
+        if not os.path.exists(self.model_path):
+            os.makedirs(self.model_path)
+    
+    def filename(self, index):
+        return '{}{}_{}_{}_{}f{}.h5'.format(self.model_path, self.dataset_name, self.env_name, self.q, index, self.seed)
 
-	def fit(self, dataset):
-		x_train, y_train = dataset.obs, dataset.acs
-		for index, model in enumerate(self.model_list):
-			model.fit(x_train, y_train[:, index])
-			train_score = model.score(x_train, y_train[:, index])
+    def fit(self, dataset):
+        x_train, y_train = dataset.obs, dataset.acs
+        for index, model in enumerate(self.model_list):
+            model.fit(x_train, y_train[:, index])
+            train_score = model.score(x_train, y_train[:, index])
 
-	def predict(self, x):
-		return [(clf.classes_ * clf.predict_proba(x.reshape(1, -1)).ravel()).sum() for clf in self.model_list]
+    def predict(self, x):
+        if self.env_name == 'Hopper-v2':
+            return [(clf.classes_ * clf.predict_proba(x.reshape(1, -1)).ravel()).sum() for clf in self.model_list]
+        elif self.env_name == 'MountainCar-v0':
+            return self.model_list[0].predict(x.reshape(1, -1))[0]
 
-	def save_weights(self):
-		for index, model in enumerate(self.model_list):
-			dump(model, self.filename(index))
+    def save_weights(self):
+        for index, model in enumerate(self.model_list):
+            dump(model, self.filename(index))
 
-	def load_weights(self):
-		for index, model in enumerate(self.model_list):
-			self.model_list[index] = load(self.filename(index))
+    def load_weights(self):
+        for index, model in enumerate(self.model_list):
+            self.model_list[index] = load(self.filename(index))
 
 class DQN(nn.Module):
     def __init__(self, input_shape, n_actions):
