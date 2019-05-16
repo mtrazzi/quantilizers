@@ -3,7 +3,7 @@ import numpy as np
 import itertools as it
 import argparse
 from datetime import datetime
-from utils.atari_wrappers import atari_wrapper, RunningMean, number_cheat
+from utils.atari_wrappers import WarpFrame, RunningMean, number_cheat
 
 class RobustRewardEnv(gym.Wrapper):
     """Gym environment wrapper that defines proxy and true rewards.
@@ -32,7 +32,7 @@ class RobustRewardEnv(gym.Wrapper):
         elif self.env_name == "Hopper-v2":
             self.num_actions = self.env.action_space.shape[0]
         elif self.env_name == "VideoPinballNoFrameskip-v4":
-            self.env = atari_wrapper(self.env_name)
+            self.env = WarpFrame(self.env)
             self.num_actions = self.env.action_space.n
         else:
             raise ValueError("unknown environment name")

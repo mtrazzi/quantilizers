@@ -13,6 +13,7 @@ from datetime import datetime
 import os, time
 
 from utils.wrappers import RobustRewardEnv
+from utils.atari_wrappers import atari_wrapper
 
 import numpy as np
 import tensorflow as tf
@@ -108,7 +109,7 @@ class DQN(nn.Module):
 
 class ConvModel(object):
     def __init__(self, q, path):
-        env = RobustRewardEnv('VideoPinballNoFrameskip-v4')
+        env = atari_wrapper(RobustRewardEnv('VideoPinballNoFrameskip-v4'))
         self.q = q
         self.net = DQN((4, 84, 84), env.action_space.n) 
         self.net.cuda()

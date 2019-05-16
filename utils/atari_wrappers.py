@@ -253,12 +253,11 @@ class LazyFrames(object):
     def __getitem__(self, i):
         return self._force()[i]
 
-def make_atari(env_id, timelimit=True):
+def make_atari(env, timelimit=True):
     # XXX(john): remove timelimit argument after gym is upgraded to allow double wrapping
-    env = gym.make(env_id)
     if not timelimit:
         env = env.env
-    assert 'NoFrameskip' in env.spec.id
+    #assert 'NoFrameskip' in env.spec.id
     env = NoopResetEnv(env, noop_max=30)
     env = MaxAndSkipEnv(env, skip=4)
     return env
@@ -282,7 +281,6 @@ def wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=False, 
         env = EpisodicLifeEnv(env)
     if 'FIRE' in env.unwrapped.get_action_meanings():
         env = FireResetEnv(env)
-    env = WarpFrame(env)
     if scale:
         env = ScaledFloatFrame(env)
     if clip_rewards:
@@ -293,5 +291,5 @@ def wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=False, 
         env = ImageToPyTorch(env)
     return env
 
-def atari_wrapper(env_name, clip_rewards=False):
-    return wrap_deepmind(make_atari(env_name), episode_life=False, clip_rewards=clip_rewards, frame_stack=True, pytorch_img=True)
+def atari_wrapper(env, clip_rewards=False):
+    return wrap_deepmind(make_atari(env), episode_life=False, clip_rewards=clip_rewards, frame_stack=True, pytorch_img=True)

@@ -14,7 +14,7 @@ class VideoPinballDataset(object):
     def __init__(self, q, set_type='train'):
         
         # change this to your setup
-        self.data_dir = '/home/ryan/ml/atari/baselines/data/atari_v2'
+        self.data_dir = 'log/VP'
         traj_dir = osp.join(self.data_dir, 'trajectories/pinball')
         self.screens_dir = osp.join(self.data_dir, 'screens/pinball')
         

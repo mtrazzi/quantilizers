@@ -395,7 +395,7 @@ def plot_distribution(tr_list, pr_list, env_name, dataset_name, quantile, seed_m
     plt.legend(loc='upper left')
     plt.savefig('log/fig/tr_distribution_{}'.format(datetime.now().strftime("%m%d-%H%M%S")))
     plt.close()
-    #sns.distplot(dataset.proxy, label='proxy reward in dataset')
+    sns.distplot(dataset.proxy, label='proxy reward in dataset')
     for i in range(seed_nb):
         sns.distplot([sum(traj) for traj in pr_list[i]], label='seed {}'.format(seed_min + i))
     plt.legend(loc='upper left')
