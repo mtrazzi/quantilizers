@@ -8,7 +8,7 @@ from datetime import datetime
 def main(env_name, filename):
     if filename is None:
         filename = "traj.npz"
-    env = gym.make("Hopper-v2")
+    env = gym.make("MountainCar-v0")
     lr = [('a',-1.),('d',1.), ('',0)]
     ud = [('s',-1.),('w',1.), ('',0)]
     fb = [('k',-1.),('j',1.), ('',0)]
