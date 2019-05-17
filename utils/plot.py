@@ -23,7 +23,7 @@ from utils.wrappers import RobustRewardEnv
 from quantilizer import test
 
 OPTIMISER_VALUES = {
-    'MountainCar-v0':               [-1.8016, -0.07979],
+    'MountainCar-v0':               [-180.16, -0.07979],
     'Hopper-v2':                    [37.4, 0.603],
     'VideoPinballNoFrameskip-v4':   [7200, 7200.089]
 }
@@ -437,12 +437,12 @@ def plot(env_name, dataset_name, seed_min=0, seed_nb=1, quantiles=[1.0, .5, .25,
         pr_imit = [sum(traj) for traj in proxy_rews_list[0]]
         print('[n={} seed={}]: tr={}+/-{} (med={}) and pr={}+/-{} (med={})'.format(len(tr_imit), seed, np.mean(tr_imit), np.std(tr_imit), np.median(tr_imit), np.mean(pr_imit), np.std(pr_imit), np.median(pr_imit)))
         
-        def apply_function(f, arr_list, opt_value):
-            return [f([np.mean(t) for t in arr]) for arr in arr_list] + [opt_value]
+        def apply_function(f, arr_list, opt_value, agg_met):
+            return [f([agg_met(t) for t in arr]) for arr in arr_list] + [opt_value]
 
         def append_results(f, tr, pr, tr_arr, pr_arr):
-            tr.append(apply_function(f,tr_arr, opt_val[0]))
-            pr.append(apply_function(f,pr_arr, opt_val[1]))
+            tr.append(apply_function(f,tr_arr, opt_val[0], np.sum))
+            pr.append(apply_function(f,pr_arr, opt_val[1], np.mean))
 
         # book-keeping for the multiple seeds plot
         if plotstyle in ['mean_seeds', 'boxplot']:
