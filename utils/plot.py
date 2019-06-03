@@ -25,7 +25,7 @@ from quantilizer import test
 OPTIMISER_VALUES = {
     'MountainCar-v0':               [-180.16, -0.07979],
     'Hopper-v2':                    [37.4, 0.603],
-    'VideoPinballNoFrameskip-v4':   [7200, 7200.089]
+    'VideoPinballNoFrameskip-v4':   [7200, 0.89]
 }
 
 OPTIMISER_NAMES = {
@@ -358,7 +358,8 @@ def plot_seeds(tr, pr, quantiles, env_name, dataset_name, m=MaxNLocator, width=.
     ### Plot black datapoints for each seeds
     for i in range(n_seeds):
         ax1.plot(seed_ticks - width/2, tr[i], 'o', color='black')
-        optimisation_values =  (np.array(pr[i]) - np.array(tr[i])) if env_name == 'VideoPinballNoFrameskip-v4' else pr[i]
+        #optimisation_values =  (np.array(pr[i]) - np.array(tr[i])) if env_name == 'VideoPinballNoFrameskip-v4' else pr[i]
+        optimisation_values = pr[i]
         ax2.plot(seed_ticks + width/2, optimisation_values, 'o', color='black')
         tr_sum += tr[i]
         opt_sum += optimisation_values

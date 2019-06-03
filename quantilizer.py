@@ -6,7 +6,8 @@ import gym
 import os, time, argparse
 
 from models import Quantilizer
-from utils.wrappers import RobustRewardEnv, atari_wrapper
+from utils.wrappers import RobustRewardEnv
+from utils.atari_wrappers import atari_wrapper
 from dataset import Dataset
 
 PARAMS = {
@@ -45,7 +46,9 @@ def traj_segment_generator(pi, env, max_steps, play=True):
 				env.env.render()
 				time.sleep(0.05)
 			ob, prox_rew, d, info = env.step(ac)
-			true_rew = info['performance']
+			#true_rew = info['performance']
+			true_rew,prox_rew = prox_rew, info['cheat']
+
 		yield {'ob': obs[:t+1], 'ac': acs[:t+1], 'done':don[:t+1],
 				 'proxy_rew':proxy_rews[:t+1], 'true_rew':true_rews[:t+1]}
 
