@@ -19,12 +19,12 @@ import numpy as np
 import tensorflow as tf
 
 PARAMS = {
-        'max_steps':        20000,
+        'max_steps':        200,
         'learning_rate':    1e-3,
         'batch_size':       512,
         'weight_decay':     1e-2,
         'tensorboard_freq': 10,
-        'save_freq':        10,
+        'save_freq':        1,
         }
 
 NB_CLASSIFIERS = {
@@ -110,9 +110,10 @@ class DQN(nn.Module):
         return self.fc(conv_out)
 
 class ConvModel(object):
-    def __init__(self, q, path):
+    def __init__(self, q, path, seed):
         env = atari_wrapper(RobustRewardEnv('VideoPinballNoFrameskip-v4'))
         self.q = q
+        self.seed = seed
         self.net = DQN((4, 84, 84), env.action_space.n) 
         self.net.cuda()
         self.optimizer = optim.Adam(self.net.parameters(), lr=PARAMS['learning_rate'], weight_decay=PARAMS['weight_decay'])
@@ -121,7 +122,7 @@ class ConvModel(object):
         self.start_time = time.time()
         self.logger = Logger('log/train/train_{}'.format(datetime.now().strftime("%m%d-%H%M%S")))
         self.model_dir = 'log/models/{}'.format(path)
-        self.model_path = '{}models.weight'.format(self.model_dir)
+        self.model_path = '{}models_{}_{}.weight'.format(self.model_dir, self.q, self.seed)
     
     def training_step(self, X, y):
         self.optimizer.zero_grad()
@@ -178,7 +179,7 @@ class Quantilizer(object):
         if env_name in ['MountainCar-v0', 'Hopper-v2']:
             self.model = ClassificationModel(dataset_name, env_name, q, seed=seed, path=path)
         elif env_name in ['VideoPinballNoFrameskip-v4']:
-            self.model = ConvModel(q, path=path)
+            self.model = ConvModel(q, path=path, seed=seed)
     
     def fit(self, dataset):
         self.model.fit(dataset)
