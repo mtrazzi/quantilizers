@@ -6,11 +6,11 @@ import gym
 import os, time, argparse
 
 from models import Quantilizer
-from utils.wrappers import RobustRewardEnv
+from utils.wrappers import RobustRewardEnv, atari_wrapper
 from dataset import Dataset
 
 PARAMS = {
-	'max_steps_test': 50000,
+	'max_steps_test': 100,
 }
 
 ACTION_SPACE_DIMS = {
@@ -102,6 +102,8 @@ def test(env_name='Hopper-v2', dataset_name='ryan', quantiles=[1.0, .5, .25, .12
 		
 		# setup
 		env = RobustRewardEnv(env_name)
+		if env_name == 'VideoPinballNoFrameskip-v4':
+			env = atari_wrapper(env)
 		proxy_rews, true_rews = [], []
 		max_steps = PARAMS['max_steps_test']
 		
