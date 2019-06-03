@@ -11,7 +11,7 @@ from utils.atari_wrappers import atari_wrapper
 from dataset import Dataset
 
 PARAMS = {
-	'max_steps_test': 100,
+	'max_steps_test': 1000,
 }
 
 ACTION_SPACE_DIMS = {
@@ -28,14 +28,16 @@ def traj_segment_generator(pi, env, max_steps, play=True):
 		d = True
 		prox_rew = 0.0
 		true_rew = 0
-		obs = np.zeros((max_steps,) + ob.shape)
+		#obs = np.zeros((max_steps,) + ob.shape)
+		obs = np.zeros((max_steps, 1))
 		acs = np.zeros((max_steps, ACTION_SPACE_DIMS[env.env_name]))
 		don = np.zeros((max_steps, 1))
 		proxy_rews = np.zeros((max_steps, 1))
 		true_rews = np.zeros((max_steps, 1))
 		for t in range(max_steps):
 			ac = pi(ob)
-			obs[t] = ob
+			#obs[t] = ob
+			obs[t] = 0
 			acs[t] = ac
 			don[t] = d
 			proxy_rews[t] = prox_rew

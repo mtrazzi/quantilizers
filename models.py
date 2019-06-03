@@ -19,12 +19,12 @@ import numpy as np
 import tensorflow as tf
 
 PARAMS = {
-        'max_steps':        200,
+        'max_steps':        10000,
         'learning_rate':    1e-3,
         'batch_size':       512,
         'weight_decay':     1e-2,
         'tensorboard_freq': 10,
-        'save_freq':        1,
+        'save_freq':        100,
         }
 
 NB_CLASSIFIERS = {
