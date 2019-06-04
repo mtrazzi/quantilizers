@@ -25,7 +25,7 @@ from quantilizer import test
 OPTIMISER_VALUES = {
     'MountainCar-v0':               [-180.16, -0.07979],
     'Hopper-v2':                    [37.4, 0.603],
-    'VideoPinballNoFrameskip-v4':   [7200, 0.89]
+    'VideoPinballNoFrameskip-v4':   [7200, 0.089]
 }
 
 OPTIMISER_NAMES = {

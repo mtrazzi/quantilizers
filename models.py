@@ -19,12 +19,12 @@ import numpy as np
 import tensorflow as tf
 
 PARAMS = {
-        'max_steps':        10000,
+        'max_steps':        200,
         'learning_rate':    1e-3,
         'batch_size':       512,
         'weight_decay':     1e-2,
         'tensorboard_freq': 10,
-        'save_freq':        100,
+        'save_freq':        1,
         }
 
 NB_CLASSIFIERS = {
@@ -113,7 +113,8 @@ class ConvModel(object):
     def __init__(self, q, path, seed):
         env = atari_wrapper(RobustRewardEnv('VideoPinballNoFrameskip-v4'))
         self.q = q
-        self.seed = seed
+        torch.manual_seed(seed)
+        np.random.seed(0)
         self.net = DQN((4, 84, 84), env.action_space.n) 
         self.net.cuda()
         self.optimizer = optim.Adam(self.net.parameters(), lr=PARAMS['learning_rate'], weight_decay=PARAMS['weight_decay'])
@@ -122,7 +123,7 @@ class ConvModel(object):
         self.start_time = time.time()
         self.logger = Logger('log/train/train_{}'.format(datetime.now().strftime("%m%d-%H%M%S")))
         self.model_dir = 'log/models/{}'.format(path)
-        self.model_path = '{}models_{}_{}.weight'.format(self.model_dir, self.q, self.seed)
+        self.model_path = '{}models_{}_{}.weight'.format(self.model_dir, self.q, seed)
     
     def training_step(self, X, y):
         self.optimizer.zero_grad()

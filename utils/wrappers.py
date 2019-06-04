@@ -65,7 +65,7 @@ class RobustRewardEnv(gym.Wrapper):
             # update the cheating rate
             cheat = number_cheat(obs)
             self.running_mean(cheat)
-            info['cheat'] = self.running_mean.mean if done else 0
+            info['cheat'] = self.running_mean.mean
             info['performance'] = reward - info['cheat'] * self.lamb
         else:
             raise ValueError("unknown environment name")
