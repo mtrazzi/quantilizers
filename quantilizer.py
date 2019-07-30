@@ -6,7 +6,8 @@ import gym
 import os, time, argparse
 
 from models import Quantilizer
-from utils.wrappers import RobustRewardEnv, atari_wrapper
+from utils.wrappers import RobustRewardEnv
+from utils.atari_wrappers import atari_wrapper
 from dataset import Dataset
 
 PARAMS = {
