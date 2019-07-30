@@ -56,12 +56,3 @@ where
 
 Here is a simple example that will generate true & proxy rewards in `log/fig`:
 `python quantilizer.py --do train test plot --env_name MountainCar-v0 --quantiles 1.0 0.5 0.25 0.1 0.01 --plotstyle mean_seeds`
-
-# Directory structure
-
-``` bash
-
-#Main files
-  |quantilizer.py                          #Main loops (training & rollouts) for the quantilizer algorithm
-  
-```
