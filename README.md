@@ -1,35 +1,10 @@
-Let's play the game `Hopper-v2` ([gym](https://gym.openai.com/envs/Hopper-v2/); [source](https://gym.openai.com/envs/Hopper-v2/)).
+[How useful is quantilization for mitigating specification-gaming?](https://drive.google.com/uc?export=download&id=13qAfOm8McRvXS33MCNH0ia4ApMIClZP9) introduces variants of several classic environments (Mountain Car, Hopper and Video Pinball) where the observed reward differs from the true reward, creating an opportunity for the agent to game the specification of the observed reward. The paper shows that a quantilizing agent avoids specification gaming and performs better in terms of true reward than both imitation learning and a regular RL agent on all the environments. This repository contains the code to reproduce the experiments from the paper.
 
-# Getting paid
+## Files overview
 
-See the rules [here](https://docs.google.com/document/d/1Xplmvf_UmAzsbg10ATrTYc-qsiVdiUjtUwXsqZLyrZM/edit?usp=sharing).
+``` bash
 
-# Getting Started
-
-1) ```git clone https://github.com/mtrazzi/quantilizers.git```
-
-2) ```cd quantilizers```
-
-2) ```pip install -Ur gather_data_requirements.txt```
-
-3) ```python gather_data.py```
-
-4) Follow the specific instructions for your game (see below).
-
-# Instructions for Hopper-v2
-
-0) **The goal of this game is to go as far as you can on the right**, using three rotations: the first one is next to the foot, the middle one and a higher one.
-
-1) After launching ```python gather_data.py```, you should see some mujocopy rendering (see image below).
-
-2) Press `d` to have "render every frame" set to `Off`, and press `Tab` to have an horizontal camera angle that follows you.
-
-2) After step 1), you will now start playing the game using your keyboard. To allow PyGame to listen to your keyboard movements, **you must have the focus on the pygame black window** (i.e. the black window must be in front of any rendering from the environment).
-
-![black window pygame](doc/img/black_window_pygame.png)
-
-3) When the pygame black window is in front, the keys to move are {j,k} (for the foot), {w,s} for the top junction and {a,d} for the middle junction. Those keys can be directly modified in the [`gather_data.py`](https://github.com/mtrazzi/quantilizers/blob/master/gather_data.py) file, replacing {j,k,w,s,a,d} with your keys.
-
-4) To do a few steps, you can mostly use the keys for the foot (jk) and sometimes use the keys from the upper junction (sw). It's recommended to watch a video of a trained AI performing the Hopper-v2 task [here](https://www.youtube.com/watch?v=2lf-3tgWiUc&t=0m45s) before playing.
-
-5) When you're done, you can close the window using the [Esc] key.
+#Main files
+  |quantilizer.py                          #Main loops (training & rollouts) for the quantilizer algorithm
+  
+```
