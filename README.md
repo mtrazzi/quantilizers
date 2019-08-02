@@ -29,7 +29,7 @@ cd ..
 
 The downloaded datasets will be in `log/[ENV_NAME]/[DATASET_NAME].npz`.
 
-For the Atari Grand Challenge datasets (for Video Pinball), the `v2` datasets are [no longer available](http://atarigrandchallenge.com/data) online.
+For the Atari Grand Challenge datasets (for Video Pinball), the `v2` datasets can be found [here](https://drive.google.com/drive/folders/1lkH15mXh8r3CEE2Onxd6ZMCASj3tfFPX?usp=sharing).
 
 ## Launching the train/test/plot pipeline
 
