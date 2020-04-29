@@ -14,13 +14,13 @@ pip install -U -r requirements.txt
 
 For Hopper-v2, you'll need to install [mujoco](https://github.com/openai/mujoco-py) first.
 
-# Play as a human (currently doesn't work)
+# Play as a human
 
 ```bash
-python play/gather_data.py --env_id {'Hopper-v2','MountainCar-v0','VideoPinballNoFrameskip-v4'}
+python play/gather_data.py --env_id {'Hopper-v2','MountainCar-v0'}
 ```
 
-(currently support for `Hopper-v2` but cannot install mujoco on machine and test it. for other envs need to change the dict move in play/gather_data.py. should be in previous commits. will check that)
+(Currently doesn't support Video Pinball. If you want to play 'VideoPinballNoFrameskip-v4' you should adapt the keys to action dictionary from ```play/gather_data.py``` to the actions of VideoPinball.)
 
 ## Instruction for Hopper-v2
 
@@ -40,6 +40,11 @@ python play/gather_data.py --env_id {'Hopper-v2','MountainCar-v0','VideoPinballN
 
 5) When you're done, you can close the window using the [Esc] key.
 
+## Instruction for MountainCar-v0
+
+1) after launching ```python gather_data.py``` you should **put the focus on the pygame black window***. That's really important. Otherwise it's impossible to catch the moves you're doing.
+
+2) moves are {a,s,d} where a is left and d is right. The goal is to reach the flag on the right.
 
 # Datasets
 
