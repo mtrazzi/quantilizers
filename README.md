@@ -4,8 +4,6 @@
 
 # Getting Started
 
-## Installation
-
 Clone this repository and install the other dependencies with `pip`:
 
 ```
@@ -14,11 +12,36 @@ cd quantilizers
 pip install -U -r requirements.txt
 ```
 
-## Optional Installation
+For Hopper-v2, you'll need to install [mujoco](https://github.com/openai/mujoco-py) first.
 
-For Hopper-v2 environments you'll need to install [mujoco](https://github.com/openai/mujoco-py) first.
+# Play as a human (currently doesn't work)
 
-## Datasets
+```bash
+python play/gather_data.py --env_id {'Hopper-v2','MountainCar-v0','VideoPinballNoFrameskip-v4'}
+```
+
+(currently support for `Hopper-v2` but cannot install mujoco on machine and test it. for other envs need to change the dict move in play/gather_data.py. should be in previous commits. will check that)
+
+## Instruction for Hopper-v2
+
+0) **The goal of this game is to go as far as you can on the right**, using three rotations: the first one is next to the foot, the middle one and a higher one.
+
+1) After launching ```python gather_data.py```, you should see some mujocopy rendering (see image below).
+
+2) Press `d` to have "render every frame" set to `Off`, and press `Tab` to have an horizontal camera angle that follows you.
+
+2) After step 1), you will now start playing the game using your keyboard. To allow PyGame to listen to your keyboard movements, **you must have the focus on the pygame black window** (i.e. the black window must be in front of any rendering from the environment).
+
+![black window pygame](doc/img/black_window_pygame.png)
+
+3) When the pygame black window is in front, the keys to move are {j,k} (for the foot), {w,s} for the top junction and {a,d} for the middle junction. Those keys can be directly modified in the [`gather_data.py`](https://github.com/mtrazzi/quantilizers/blob/master/gather_data.py) file, replacing {j,k,w,s,a,d} with your keys.
+
+4) To do a few steps, you can mostly use the keys for the foot (jk) and sometimes use the keys from the upper junction (sw). It's recommended to watch a video of a trained AI performing the Hopper-v2 task [here](https://www.youtube.com/watch?v=2lf-3tgWiUc&t=0m45s) before playing.
+
+5) When you're done, you can close the window using the [Esc] key.
+
+
+# Datasets
 
 To import the `Hopper-v2` and `MountainCar-v0` human datasets, run the following command:
 ```
@@ -31,7 +54,7 @@ The downloaded datasets will be in `log/[ENV_NAME]/[DATASET_NAME].npz`.
 
 For the Atari Grand Challenge datasets (for Video Pinball), the `v2` datasets can be found [here](https://drive.google.com/drive/folders/1lkH15mXh8r3CEE2Onxd6ZMCASj3tfFPX?usp=sharing).
 
-## Launching the train/test/plot pipeline
+# Launching the train/test/plot pipeline
 
 Simply run the following command:
 ```
